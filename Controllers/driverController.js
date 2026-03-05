@@ -1,4 +1,3 @@
-
 import User from '../Models/User.js';
 
 // @desc    Get driver profile (with driverDetails)
@@ -175,7 +174,7 @@ export const getEarnings = async (req, res) => {
         const now = new Date();
         const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         
-        const startOfWeek = new Date(startOfToday); // Assuming Sunday is start
+        const startOfWeek = new Date(startOfToday); 
         startOfWeek.setDate(startOfToday.getDate() - startOfToday.getDay());
         
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
