@@ -1,6 +1,9 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { OAuth2Client } from 'google-auth-library';
 import User from '../Models/User.js';
+
+const googleClient = new OAuth2Client('110831328035-bqft18nqtfk06o3qrc78d414s731m8b5.apps.googleusercontent.com');
 
 // ─── Helper ────────────────────────────────────────────────────
 const generateToken = (id) =>
@@ -136,6 +139,64 @@ export const login = async (req, res) => {
     } catch (error) {
         console.error('Login error:', error);
         return sendError(res, 500, `Login failed: ${error.message}`);
+    }
+};
+
+// ─── @route  POST /api/auth/google ───────────────────────────────
+// @desc   Login or Register with Google Sign-In
+// @access Public
+export const googleLogin = async (req, res) => {
+    try {
+        const { idToken, role } = req.body;
+
+        if (!idToken) {
+            return sendError(res, 400, 'Please provide idToken');
+        }
+
+        const ticket = await googleClient.verifyIdToken({
+            idToken,
+            audience: '110831328035-bqft18nqtfk06o3qrc78d414s731m8b5.apps.googleusercontent.com',
+        });
+        const payload = ticket.getPayload();
+
+        if (!payload || !payload.email) {
+            return sendError(res, 400, 'Invalid Google Token');
+        }
+
+        const { email, name, picture } = payload;
+
+        let user = await User.findOne({ email });
+
+        if (!user) {
+            user = new User({
+                name: name || 'Google User',
+                email,
+                phone: undefined, // Explicitly undefined for Google users
+                password: await bcrypt.hash(idToken + (process.env.JWT_SECRET || 'secret'), 10),
+                role: role || 'passenger',
+                profileImage: picture,
+                verificationStatus: {
+                    email: true,
+                    phone: false,
+                    idCard: false,
+                    communityTrusted: false
+                }
+            });
+            await user.save();
+        }
+
+        const token = generateToken(user._id);
+        const userData = user.toObject();
+        delete userData.password;
+
+        return sendSuccess(res, 200, 'Google Login successful', {
+            ...userData,
+            token,
+        });
+
+    } catch (error) {
+        console.error('Google login error:', error);
+        return sendError(res, 500, `Google Login failed: ${error.message}`);
     }
 };
 

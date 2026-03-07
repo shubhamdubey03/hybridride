@@ -14,8 +14,8 @@ const userSchema = new mongoose.Schema(
 
     phone: {
       type: String,
-      required: true,
       unique: true,
+      sparse: true, // Allows multiple null/undefined values for users who signed up via Google
       index: true,
     },
 
