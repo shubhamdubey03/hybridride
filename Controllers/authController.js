@@ -22,8 +22,12 @@ export const register = async (req, res) => {
     try {
         const { name, email, phone, password, role } = req.body;
 
-        if (!name || !email || !phone || !password) {
-            return sendError(res, 400, 'Please provide name, email, phone and password');
+        if (!name || !email || !phone) {
+            return sendError(res, 400, 'Please provide name, email, and phone');
+        }
+
+        if (!password && !req.body.googleIdToken) {
+            return sendError(res, 400, 'Please provide a password');
         }
 
         const userExists = await User.findOne({ $or: [{ email }, { phone }] });
