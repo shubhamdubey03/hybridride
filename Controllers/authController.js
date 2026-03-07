@@ -31,11 +31,10 @@ export const register = async (req, res) => {
             return sendError(res, 409, 'User with this email or phone already exists');
         }
 
-        const hashedPassword = await bcrypt.hash(password, 10);
+        const hashedPassword = await bcrypt.hash(req.body.googleIdToken ? req.body.googleIdToken + (process.env.JWT_SECRET || 'secret') : password, 10);
 
         let driverDetailsData = undefined;
         if (role === 'driver') {
-            
             let vehicleData = req.body.vehicle;
 
             // Fallback: Check if nested in driverDetails (common confusion)
@@ -54,7 +53,6 @@ export const register = async (req, res) => {
             }
 
             if (vehicleData) {
-                
                 // Explicitly valid fields to prevent stripping
                 driverDetailsData = {
                     vehicle: {
@@ -80,7 +78,14 @@ export const register = async (req, res) => {
             phone,
             password: hashedPassword,
             role: role || 'passenger',
-            driverDetails: driverDetailsData
+            profileImage: req.body.profileImage || '',
+            driverDetails: driverDetailsData,
+            verificationStatus: {
+                email: req.body.googleIdToken ? true : false,
+                phone: false,
+                idCard: false,
+                communityTrusted: false
+            }
         });
 
         const savedUser = await user.save();
@@ -168,21 +173,19 @@ export const googleLogin = async (req, res) => {
         let user = await User.findOne({ email });
 
         if (!user) {
-            user = new User({
-                name: name || 'Google User',
-                email,
-                phone: undefined, // Explicitly undefined for Google users
-                password: await bcrypt.hash(idToken + (process.env.JWT_SECRET || 'secret'), 10),
-                role: role || 'passenger',
-                profileImage: picture,
-                verificationStatus: {
-                    email: true,
-                    phone: false,
-                    idCard: false,
-                    communityTrusted: false
+            // User does not exist in our database.
+            // Return 404 with Google payload so frontend can route to Profile Setup.
+            return res.status(404).json({
+                success: false,
+                isRegistered: false,
+                message: 'User not registered',
+                googleData: {
+                    email,
+                    name: name || 'Google User',
+                    picture,
+                    idToken
                 }
             });
-            await user.save();
         }
 
         const token = generateToken(user._id);
