@@ -95,11 +95,14 @@ export const register = async (req, res) => {
         });
 
         const savedUser = await user.save();
-
+        const token = generateToken(savedUser._id);
         const userData = savedUser.toObject();
         delete userData.password;
 
-        return sendSuccess(res, 201, 'Registration successful', userData);
+        return sendSuccess(res, 201, 'Registration successful', {
+            ...userData,
+            token
+        });
     } catch (error) {
         console.error('Register error:', error);
         return sendError(
@@ -133,6 +136,17 @@ export const login = async (req, res) => {
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
             return sendError(res, 401, 'Invalid credentials');
+        }
+
+        // --- NEW: Bypass OTP for Admins ---
+        if (user.role === 'admin') {
+            const token = generateToken(user._id);
+            const userData = user.toObject();
+            delete userData.password;
+            return sendSuccess(res, 200, 'Admin Login successful', {
+                ...userData,
+                token
+            });
         }
 
         // Generate 6-digit OTP
