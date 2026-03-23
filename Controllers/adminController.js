@@ -329,3 +329,58 @@ export const getRideById = async (req, res) => {
         res.status(500).json({ success: false, message: 'Server Error' });
     }
 };
+
+// @desc    Admin upload driver documents
+// @route   POST /api/admin/drivers/:id/upload
+// @access  Private (Admin)
+export const uploadDriverDocument = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { docType } = req.body;
+
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: 'No file uploaded' });
+        }
+
+        const validDocTypes = ['licenseFront', 'licenseBack', 'registration', 'insurance', 'aadharFront', 'aadharBack', 'panCard', 'permit', 'fitness', 'rc', 'profileImage'];
+        if (!docType || !validDocTypes.includes(docType)) {
+            return res.status(400).json({ success: false, message: 'Invalid or missing docType' });
+        }
+
+        const filePath = `/uploads/${req.file.filename}`;
+
+        let updateQuery = {};
+        if (docType === 'profileImage') {
+            updateQuery = { $set: { profileImage: filePath } };
+        } else {
+            const updateField = `driverDetails.documents.${docType}`;
+            updateQuery = { $set: { [updateField]: filePath } };
+        }
+
+        const driver = await User.findByIdAndUpdate(
+            id,
+            updateQuery,
+            { new: true }
+        );
+
+        if (!driver) {
+            return res.status(404).json({ success: false, message: 'Driver not found' });
+        }
+
+        res.json({ success: true, message: `${docType} uploaded successfully`, data: driver });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+};
+
+// Add getDriverWallets if missing or update it
+export const getDriverWallets = async (req, res) => {
+    try {
+        const drivers = await User.find({ role: 'driver' }).select('name phone email driverDetails.wallet balance');
+        res.json({ success: true, data: drivers });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+};

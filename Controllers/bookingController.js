@@ -328,14 +328,22 @@ export const rateRide = async (req, res) => {
             }
             booking.ratingByPassenger = { rating, comment, givenAt: now };
 
-            // Update driver's average rating
+            // Update driver's ratings (both root and driverDetails for compatibility)
             if (booking.driver) {
                 const driver = await User.findById(booking.driver);
                 if (driver) {
-                    const prev  = driver.driverDetails.ratings;
+                    // Update Root Ratings
+                    const rootPrev = driver.ratings || { average: 0, count: 0 };
+                    const rootCount = rootPrev.count + 1;
+                    const rootAvg = ((rootPrev.average * rootPrev.count) + rating) / rootCount;
+                    driver.ratings = { average: Math.round(rootAvg * 10) / 10, count: rootCount };
+
+                    // Update Legacy DriverDetails Ratings
+                    const prev = driver.driverDetails.ratings;
                     const count = prev.count + 1;
-                    const avg   = ((prev.average * prev.count) + rating) / count;
+                    const avg = ((prev.average * prev.count) + rating) / count;
                     driver.driverDetails.ratings = { average: Math.round(avg * 10) / 10, count };
+                    
                     await driver.save();
                 }
             }
@@ -344,6 +352,16 @@ export const rateRide = async (req, res) => {
                 return res.status(409).json({ success: false, message: 'You have already rated this ride' });
             }
             booking.ratingByDriver = { rating, comment, givenAt: now };
+
+            // Update passenger's ratings (root level)
+            const passenger = await User.findById(booking.passenger);
+            if (passenger) {
+                const prev = passenger.ratings || { average: 0, count: 0 };
+                const count = prev.count + 1;
+                const avg = ((prev.average * prev.count) + rating) / count;
+                passenger.ratings = { average: Math.round(avg * 10) / 10, count };
+                await passenger.save();
+            }
         }
 
         await booking.save();

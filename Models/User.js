@@ -42,6 +42,11 @@ const userSchema = new mongoose.Schema(
       default: "",
     },
 
+    ratings: {
+      average: { type: Number, default: 0 },
+      count: { type: Number, default: 0 },
+    },
+
     driverDetails: {
       licenseNumber: { type: String },
 
