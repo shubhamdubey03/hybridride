@@ -373,14 +373,3 @@ export const uploadDriverDocument = async (req, res) => {
         res.status(500).json({ success: false, message: 'Server Error' });
     }
 };
-
-// Add getDriverWallets if missing or update it
-export const getDriverWallets = async (req, res) => {
-    try {
-        const drivers = await User.find({ role: 'driver' }).select('name phone email driverDetails.wallet balance');
-        res.json({ success: true, data: drivers });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ success: false, message: 'Server Error' });
-    }
-};
