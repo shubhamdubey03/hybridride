@@ -1,6 +1,5 @@
 import express from 'express';
 import { protect, adminOnly } from '../Middleware/authMiddleware.js';
-import upload from '../Utils/multer.js';
 import { 
     getDrivers, 
     verifyDriver, 
@@ -13,8 +12,7 @@ import {
     getAllPools, 
     getAllRides, 
     getRideById, 
-    getDriverWallets,
-    uploadDriverDocument
+    getDriverWallets
 } from '../Controllers/adminController.js';
 
 const router = express.Router();
