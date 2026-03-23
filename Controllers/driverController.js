@@ -140,8 +140,8 @@ export const uploadDocument = async (req, res) => {
 
         res.json({ success: true, message: 'File uploaded and saved', filePath, docType });
     } catch (error) {
-         console.error(error);
-         res.status(500).json({ success: false, message: 'Upload Failed' });
+         console.error("UPLOAD ERROR:", error);
+         res.status(500).json({ success: false, message: 'Upload Failed', error: error.message });
     }
 };
 
