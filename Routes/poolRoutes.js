@@ -6,7 +6,8 @@ import {
     bookSeat,
     getDriverPools,
     getPassengerPools,
-    updatePoolStatus
+    updatePoolStatus,
+    cancelBooking
 } from '../Controllers/poolController.js';
 
 const router = express.Router();
@@ -22,6 +23,7 @@ router.use(protect);
 router.get('/search', searchRides);
 router.post('/:id/book', bookSeat);
 router.get('/history', getPassengerPools);
+router.put('/:id/cancel-booking', cancelBooking);
 
 // POST   /api/pools/publish      → Driver publishes a City, Outstation, or Rental pool
 // GET    /api/pools/driver-history → Driver returns active and past pools they host

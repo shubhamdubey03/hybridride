@@ -220,11 +220,49 @@ export const updatePoolStatus = async (req, res) => {
         }
 
         ride.status = status;
+        if (req.body.cancellationReason) {
+            ride.cancellationReason = req.body.cancellationReason;
+        }
         await ride.save();
 
         return res.status(200).json({ success: true, message: `Ride status updated to ${status}`, data: ride });
     } catch (error) {
         console.error('updatePoolStatus error:', error);
         return res.status(500).json({ success: false, message: 'Failed to update ride status' });
+    }
+};
+
+// ─── 7. PUT /api/pools/:id/cancel-booking ──────────────────
+// Passenger cancels their own booking in a pool
+// @access Private (Passenger)
+export const cancelBooking = async (req, res) => {
+    try {
+        const { cancellationReason } = req.body;
+        const rideId = req.params.id;
+
+        const ride = await Ride.findById(rideId);
+        if (!ride) return res.status(404).json({ success: false, message: 'Ride not found' });
+
+        const passengerIndex = ride.passengers.findIndex(p => p.user.toString() === req.user._id.toString() && p.bookingStatus !== 'cancelled');
+        
+        if (passengerIndex === -1) {
+            return res.status(400).json({ success: false, message: 'Active booking not found for this user' });
+        }
+
+        const booking = ride.passengers[passengerIndex];
+        
+        // Restore seats
+        ride.availableSeats += booking.seatsBooked;
+        
+        // Update status and reason
+        booking.bookingStatus = 'cancelled';
+        booking.cancellationReason = cancellationReason || 'No reason provided';
+
+        await ride.save();
+
+        return res.status(200).json({ success: true, message: 'Booking cancelled successfully', data: ride });
+    } catch (error) {
+        console.error('cancelBooking error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to cancel booking' });
     }
 };

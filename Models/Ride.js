@@ -19,6 +19,7 @@ const rideSchema = new mongoose.Schema(
       enum: ["scheduled", "ongoing", "completed", "cancelled"],
       default: "scheduled",
     },
+    cancellationReason: { type: String },
 
     origin: {
       name: { type: String, required: true },
@@ -106,6 +107,7 @@ const rideSchema = new mongoose.Schema(
         },
 
         otp: { type: String },
+        cancellationReason: { type: String },
       },
     ],
 
