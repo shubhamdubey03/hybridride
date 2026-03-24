@@ -72,7 +72,12 @@ export const requestRide = async (req, res) => {
 
     } catch (error) {
         console.error('requestRide error:', error);
-        return res.status(500).json({ success: false, message: 'Failed to request ride' });
+        return res.status(500).json({ 
+            success: false, 
+            message: 'Failed to request ride',
+            error: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
     }
 };
 
@@ -135,6 +140,8 @@ export const acceptRide = async (req, res) => {
         booking.driver     = req.user._id;
         booking.status     = 'accepted';
         booking.acceptedAt = new Date();
+        // Generate a 4-digit OTP for the ride
+        booking.otp = Math.floor(1000 + Math.random() * 9000).toString();
         await booking.save();
 
         const populated = await booking.populate([
@@ -154,7 +161,7 @@ export const acceptRide = async (req, res) => {
 // @access Private (Driver or Passenger)
 export const updateRideStatus = async (req, res) => {
     try {
-        const { status, cancellationReason } = req.body || {};
+        const { status, cancellationReason, otp } = req.body || {};
 
         const VALID_TRANSITIONS = {
             driver: {
@@ -193,7 +200,15 @@ export const updateRideStatus = async (req, res) => {
         booking.status = status;
         const now = new Date();
         if (status === 'arrived')    booking.arrivedAt   = now;
-        if (status === 'ongoing')    booking.startedAt   = now;
+        if (status === 'ongoing') {
+            // Require OTP if the driver is starting the ride
+            if (isDriver) {
+                if (!otp || otp !== booking.otp) {
+                    return res.status(400).json({ success: false, message: 'Invalid OTP. Please enter the correct 4-digit code.' });
+                }
+            }
+            booking.startedAt = now;
+        }
         if (status === 'completed') {
             if (booking.status !== 'completed') {
                 booking.completedAt = now;

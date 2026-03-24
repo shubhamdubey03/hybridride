@@ -63,6 +63,7 @@ const bookingSchema = new mongoose.Schema(
 
     distanceKm:   { type: Number, default: 0 },
     durationMins: { type: Number, default: 0 },
+    otp:          { type: String }, // 4-digit OTP to start ride
     earningsProcessed: { type: Boolean, default: false },
 
     // ─── Payment ───────────────────────────────────────
