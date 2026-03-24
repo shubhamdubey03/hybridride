@@ -1,17 +1,27 @@
 import multer from 'multer';
 import { CloudinaryStorage } from 'multer-storage-cloudinary';
-import cloudinary from './cloudinary.js';
+import { v2 as cloudinary } from 'cloudinary';
+import dotenv from 'dotenv';
 
-// Cloudinary Storage configuration
+dotenv.config();
+
+// Consolidated Cloudinary config
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
 const storage = new CloudinaryStorage({
     cloudinary: cloudinary,
-    params: (req, file) => {
-        const userId = req.user ? req.user._id.toString() : 'unknown';
-        return {
-            folder: 'hybrid_ride_uploads',
-            format: 'jpg',
-            public_id: `upload-${userId}-${Date.now()}`,
-        };
+    params: {
+        folder: 'hybrid_ride_uploads',
+        format: 'jpg',
+        public_id: (req, file) => {
+            console.log("MULTER DEBUG: Inside public_id for", file.originalname);
+            const userId = req.user ? req.user._id.toString() : 'unknown';
+            return `upload-${userId}-${Date.now()}`;
+        },
     },
 });
 
