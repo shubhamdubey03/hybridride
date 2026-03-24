@@ -243,7 +243,10 @@ export const cancelBooking = async (req, res) => {
         const ride = await Ride.findById(rideId);
         if (!ride) return res.status(404).json({ success: false, message: 'Ride not found' });
 
-        const passengerIndex = ride.passengers.findIndex(p => p.user.toString() === req.user._id.toString() && p.bookingStatus !== 'cancelled');
+        const passengerIndex = ride.passengers.findIndex(p => {
+            const passengerId = p.user?._id || p.user;
+            return passengerId && passengerId.toString() === req.user._id.toString() && p.bookingStatus !== 'cancelled';
+        });
         
         if (passengerIndex === -1) {
             return res.status(400).json({ success: false, message: 'Active booking not found for this user' });
