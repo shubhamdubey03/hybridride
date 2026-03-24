@@ -5,13 +5,14 @@ import cloudinary from './cloudinary.js';
 // Cloudinary Storage configuration
 const storage = new CloudinaryStorage({
     cloudinary: cloudinary,
-    params: {
-        folder: 'hybrid_ride_uploads',
-        allowed_formats: ['jpg', 'jpeg', 'png', 'pdf'],
-        public_id: (req, file) => {
-            const userId = req.user ? req.user._id : 'unknown';
-            return `upload-${userId}-${Date.now()}`;
-        },
+    params: async (req, file) => {
+        console.log("MULTER DEBUG: Initializing upload for:", file.originalname);
+        const userId = req.user ? req.user._id.toString() : 'unknown';
+        return {
+            folder: 'hybrid_ride_uploads',
+            format: 'jpg',
+            public_id: `upload-${userId}-${Date.now()}`,
+        };
     },
 });
 
