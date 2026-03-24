@@ -184,8 +184,15 @@ export const getDriverPools = async (req, res) => {
 // @access Private (Passenger)
 export const getPassengerPools = async (req, res) => {
     try {
-        // Query rides where this user ID is inside the passengers array
-        const rides = await Ride.find({ 'passengers.user': req.user._id })
+        // Query rides where this user ID is inside the passengers array AND their booking is not cancelled
+        const rides = await Ride.find({ 
+            passengers: { 
+                $elemMatch: { 
+                    user: req.user._id, 
+                    bookingStatus: { $ne: 'cancelled' } 
+                } 
+            } 
+        })
             .populate('host', 'name phone profileImage driverDetails')
             .sort({ scheduledTime: -1 });
 
