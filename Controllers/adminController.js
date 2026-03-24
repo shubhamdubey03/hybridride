@@ -7,7 +7,7 @@ export const getDrivers = async (req, res) => {
     try {
         console.log(`Admin ${req.user.email} fetching drivers...`);
         const { status } = req.query;
-        let query = { role: 'driver' };
+        let query = { role: { $regex: /^driver$/i } };
 
         if (status === 'pending') {
             query['driverApprovalStatus'] = 'pending';
@@ -18,7 +18,8 @@ export const getDrivers = async (req, res) => {
         }
 
         const drivers = await User.find(query).select('-password');
-        res.json({ success: true, data: drivers });
+        console.log(`Found ${drivers.length} drivers.`);
+        res.json({ success: true, count: drivers.length, data: drivers });
     } catch (error) {
         console.error(error);
         res.status(500).json({ success: false, message: 'Server Error' });
@@ -32,7 +33,7 @@ export const verifyDriver = async (req, res) => {
         const { action } = req.body; // 'approve' or 'reject'
 
         const driver = await User.findById(id);
-        if (!driver || driver.role !== 'driver') {
+        if (!driver || !/^driver$/i.test(driver.role)) {
             return res.status(404).json({ success: false, message: 'Driver not found' });
         }
 
@@ -67,10 +68,15 @@ export const verifyDriver = async (req, res) => {
 // Get list of passengers
 export const getPassengers = async (req, res) => {
     try {
-        const passengers = await User.find({ role: 'passenger' }).select('-password');
-        res.json({ success: true, data: passengers });
+        console.log(`Admin ${req.user.email} fetching passengers...`);
+        const passengers = await User.find({ 
+            role: { $regex: /^passenger$/i } 
+        }).select('-password');
+        
+        console.log(`Found ${passengers.length} passengers.`);
+        res.json({ success: true, count: passengers.length, data: passengers });
     } catch (error) {
-        console.error(error);
+        console.error('getPassengers error:', error);
         res.status(500).json({ success: false, message: 'Server Error' });
     }
 };
@@ -147,9 +153,9 @@ export const getPassengerTransactions = async (req, res) => {
 // Get dashboard statistics
 export const getDashboardStats = async (req, res) => {
     try {
-        const totalPassengers = await User.countDocuments({ role: 'passenger' });
-        const totalDrivers = await User.countDocuments({ role: 'driver' });
-        const activeDrivers = await User.countDocuments({ role: 'driver', driverApprovalStatus: 'approved' });
+        const totalPassengers = await User.countDocuments({ role: { $regex: /^passenger$/i } });
+        const totalDrivers = await User.countDocuments({ role: { $regex: /^driver$/i } });
+        const activeDrivers = await User.countDocuments({ role: { $regex: /^driver$/i }, driverApprovalStatus: 'approved' });
         
         const today = new Date();
         today.setHours(0, 0, 0, 0);

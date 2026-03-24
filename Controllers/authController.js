@@ -23,6 +23,7 @@ const sendError = (res, statusCode, message) =>
 export const register = async (req, res) => {
     try {
         const { name, email, phone, password, role } = req.body;
+        console.log(`DEBUG: Registration attempt for ${email} / ${phone} with role: ${role}`);
 
         if (!name || !email || !phone) {
             return sendError(res, 400, 'Please provide name, email, and phone');
@@ -34,13 +35,17 @@ export const register = async (req, res) => {
 
         const userExists = await User.findOne({ $or: [{ email }, { phone }] });
         if (userExists) {
+            console.log(`DEBUG: User already exists: ${email} / ${phone}`);
             return sendError(res, 409, 'User with this email or phone already exists');
         }
 
         const hashedPassword = await bcrypt.hash(req.body.googleIdToken ? req.body.googleIdToken + (process.env.JWT_SECRET || 'secret') : password, 10);
 
+        const normalizedRole = role?.toLowerCase() || 'passenger';
+        console.log(`DEBUG: Normalized role for ${email}: ${normalizedRole}`);
+
         let driverDetailsData = undefined;
-        if (role === 'driver') {
+        if (normalizedRole === 'driver') {
             let vehicleData = req.body.vehicle;
 
             // Fallback: Check if nested in driverDetails (common confusion)
@@ -67,14 +72,31 @@ export const register = async (req, res) => {
                         year: vehicleData.year,
                         plateNumber: vehicleData.plateNumber,
                         color: vehicleData.color,
+                        type: vehicleData.type || 'CAR',
                         fuelType: vehicleData.fuelType || 'Petrol',
                         seatingCapacity: Number(vehicleData.seatingCapacity) || 4,
                         bootSpace: vehicleData.bootSpace
                     },
-                    licenseNumber: req.body.licenseNumber
+                    licenseNumber: req.body.licenseNumber || req.body.driverDetails?.licenseNumber,
+                    verificationStatus: {
+                        email: req.body.googleIdToken ? true : false,
+                        phone: false,
+                        idCard: false,
+                        communityTrusted: false
+                    }
                 };
             } else {
-                console.warn("Vehicle data not found in request body.");
+                console.warn("Vehicle data not found in request body for driver registration.");
+                // Still create empty driverDetails to ensure role=driver works
+                driverDetailsData = {
+                    vehicle: {},
+                    verificationStatus: {
+                        email: req.body.googleIdToken ? true : false,
+                        phone: false,
+                        idCard: false,
+                        communityTrusted: false
+                    }
+                };
             }
         }
 
@@ -83,7 +105,7 @@ export const register = async (req, res) => {
             email,
             phone,
             password: hashedPassword,
-            role: role || 'passenger',
+            role: normalizedRole,
             profileImage: req.body.profileImage || '',
             driverDetails: driverDetailsData,
             verificationStatus: {
@@ -95,6 +117,8 @@ export const register = async (req, res) => {
         });
 
         const savedUser = await user.save();
+        console.log(`DEBUG: User saved successfully with role: ${savedUser.role}`);
+
         const token = generateToken(savedUser._id);
         const userData = savedUser.toObject();
         delete userData.password;
