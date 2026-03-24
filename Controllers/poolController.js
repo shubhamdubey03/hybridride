@@ -68,12 +68,13 @@ export const searchRides = async (req, res) => {
         };
 
         if (date) {
-            // Temporarily ignore the strict date parsing for Outstation testing 
-            // query.scheduledTime = { $gte: new Date(date) };
-            query.scheduledTime = { $gte: new Date(Date.now() - 12 * 60 * 60 * 1000) };
+            const searchDate = new Date(date);
+            const startOfDay = new Date(searchDate.setHours(0, 0, 0, 0));
+            const endOfDay = new Date(searchDate.setHours(23, 59, 59, 999));
+            query.scheduledTime = { $gte: startOfDay, $lte: endOfDay };
         } else {
-            // Shift baseline search tolerance 12 hours negative so freshly published rides don't instantly disappear in testing
-            query.scheduledTime = { $gte: new Date(Date.now() - 12 * 60 * 60 * 1000) };
+            // Default: Upcoming rides from now
+            query.scheduledTime = { $gte: new Date() };
         }
 
         if (fromCoords) {
