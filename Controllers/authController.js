@@ -157,6 +157,12 @@ export const login = async (req, res) => {
             return sendError(res, 401, 'Invalid credentials');
         }
 
+        // --- NEW: Role Verification ---
+        if (req.body.role && user.role !== req.body.role.toLowerCase()) {
+            return sendError(res, 403, `This account is registered as a ${user.role.charAt(0).toUpperCase() + user.role.slice(1)}. Please log in through the correct application section.`);
+        }
+
+
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
             return sendError(res, 401, 'Invalid credentials');
@@ -245,6 +251,12 @@ export const verifyOTP = async (req, res) => {
             return sendError(res, 401, 'Invalid or expired OTP');
         }
 
+        // --- NEW: Role Verification ---
+        if (req.body.role && user.role !== req.body.role.toLowerCase()) {
+            return sendError(res, 403, `Role mismatch during verification. This account is registered as a ${user.role}.`);
+        }
+
+
         // Clear OTP
         user.otp = null;
         user.otpExpires = null;
@@ -307,6 +319,11 @@ export const googleLogin = async (req, res) => {
             });
         }
 
+        // --- NEW: Role Verification for existing Google users ---
+        if (role && user.role !== role.toLowerCase()) {
+            return sendError(res, 403, `This Google account is already registered as a ${user.role}. Please use the correct application section.`);
+        }
+
         const token = generateToken(user._id);
         const userData = user.toObject();
         delete userData.password;
@@ -338,6 +355,12 @@ export const whatsappLogin = async (req, res) => {
         if (!user) {
             return sendError(res, 404, 'User not found. Please sign up first.');
         }
+
+        // --- NEW: Role Verification ---
+        if (req.body.role && user.role !== req.body.role.toLowerCase()) {
+            return sendError(res, 403, `This account is registered as a ${user.role}. Please log in through the correct section.`);
+        }
+
 
         // Generate 6-digit OTP
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
