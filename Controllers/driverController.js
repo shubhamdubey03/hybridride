@@ -129,7 +129,12 @@ export const uploadDocument = async (req, res) => {
             updateQuery = { $set: { profileImage: filePath } };
         } else {
             const updateField = `driverDetails.documents.${docType}`;
-            updateQuery = { $set: { [updateField]: filePath } };
+            updateQuery = { 
+                $set: { 
+                    [updateField]: filePath,
+                    driverApprovalStatus: 'pending' // Reset to pending for admin review
+                } 
+            };
         }
         
         const user = await User.findByIdAndUpdate(

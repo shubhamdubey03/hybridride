@@ -127,6 +127,7 @@ const userSchema = new mongoose.Schema(
     },
 
     isBlocked: { type: Boolean, default: false },
+    rejectionReason: { type: String, default: "" },
 
     walletBalance: { type: Number, default: 0 },
 

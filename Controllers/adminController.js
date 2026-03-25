@@ -39,6 +39,7 @@ export const verifyDriver = async (req, res) => {
 
         if (action === 'approve') {
             driver.driverApprovalStatus = 'approved';
+            driver.rejectionReason = ""; // Clear rejection reason on approval
             driver.verificationStatus = {
                 email: true,
                 phone: true, 
@@ -50,7 +51,9 @@ export const verifyDriver = async (req, res) => {
             return res.json({ success: true, message: 'Driver approved successfully', data: driver });
             
         } else if (action === 'reject') {
+            const { rejectionReason } = req.body;
             driver.driverApprovalStatus = 'rejected';
+            driver.rejectionReason = rejectionReason || "Your documents did not meet our requirements.";
             driver.verificationStatus.communityTrusted = false;
             driver.verificationStatus.idCard = false;
             await driver.save();
