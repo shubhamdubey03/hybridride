@@ -12,8 +12,6 @@ import {
     getAllPools, 
     getAllRides, 
     getRideById, 
-    getAllRides, 
-    getRideById, 
     getPoolById,
     getDriverWallets
 } from '../Controllers/adminController.js';
