@@ -75,7 +75,15 @@ export const requestWithdrawal = async (req, res) => {
 export const getMyWallet = async (req, res) => {
     try {
         const userId = req.user._id;
-        const user = await User.findById(userId).select('walletBalance role');
+        let user = await User.findById(userId);
+        
+        // Lazy Sync for Drivers: If they have gross earnings but 0 wallet balance, 
+        // Sync the 98% share to make it withdrawable as requested.
+        if (user.role === 'driver' && user.driverDetails?.earnings > 0 && user.walletBalance === 0) {
+            user.walletBalance = Math.round(user.driverDetails.earnings * 0.98 * 100) / 100;
+            await user.save();
+            console.log(`Synced wallet balance for driver ${user.name}: ₹${user.walletBalance}`);
+        }
         
         let wallet = await Wallet.findOne({ user: userId });
         if (!wallet) {
