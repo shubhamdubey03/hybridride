@@ -1,6 +1,7 @@
 import Razorpay from "razorpay";
 import crypto from "crypto";
 import User from "../Models/User.js";
+import Wallet from "../Models/Wallet.js";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -68,6 +69,21 @@ export const verifyPayment = async (req, res) => {
         }
         
         await user.save();
+
+        // Log transaction in Wallet model
+        let wallet = await Wallet.findOne({ user: userId });
+        if (!wallet) {
+            wallet = await Wallet.create({ user: userId, balance: user.walletBalance });
+        }
+        
+        wallet.balance = user.walletBalance;
+        wallet.transactions.push({
+            type: 'credit',
+            amount: amount,
+            description: 'Wallet Top-up via Razorpay',
+            referenceId: razorpay_payment_id
+        });
+        await wallet.save();
 
         res.status(200).json({
             success: true,

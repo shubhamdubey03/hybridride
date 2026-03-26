@@ -260,19 +260,38 @@ export const getFinancialOverview = async (req, res) => {
 // Get driver wallets for admin payouts page
 export const getDriverWallets = async (req, res) => {
     try {
-        const drivers = await User.find({ role: 'driver' }).select('name _id walletBalance driverDetails.earnings');
+        const drivers = await User.find({ role: { $regex: /^driver$/i } }).select('name _id walletBalance driverDetails.earnings');
         
         const wallets = drivers.map(d => ({
             driverId: d._id,
             driverName: d.name,
             balance: d.walletBalance || 0,
             totalEarned: d.driverDetails?.earnings || 0,
-            commissionDue: 0 // Mock for now, could be calculated based on bookings
+            commissionDue: 0 
         }));
         
         res.json({ success: true, count: wallets.length, data: wallets });
     } catch (error) {
         console.error('getDriverWallets error:', error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+};
+
+// Get passenger wallets for admin
+export const getPassengerWallets = async (req, res) => {
+    try {
+        const passengers = await User.find({ role: { $regex: /^passenger$/i } }).select('name _id walletBalance phone');
+        
+        const wallets = passengers.map(p => ({
+            passengerId: p._id,
+            passengerName: p.name,
+            phone: p.phone,
+            balance: p.walletBalance || 0
+        }));
+        
+        res.json({ success: true, count: wallets.length, data: wallets });
+    } catch (error) {
+        console.error('getPassengerWallets error:', error);
         res.status(500).json({ success: false, message: 'Server Error' });
     }
 };
