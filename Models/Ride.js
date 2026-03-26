@@ -65,7 +65,7 @@ const rideSchema = new mongoose.Schema(
     vehicle: { type: String },
     vehicleType: {
       type: String,
-      enum: ["CAR", "BIKE", "TRAVELER"],
+      enum: ["CAR", "BIKE", "TRAVELER", "AUTO"],
       default: "CAR",
     },
 

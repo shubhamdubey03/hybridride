@@ -56,7 +56,7 @@ const userSchema = new mongoose.Schema(
         year: { type: String, default: "" },
         plateNumber: { type: String, default: "" },
         color: { type: String, default: "" },
-        type: { type: String, default: "Sedan" },
+        type: { type: String, default: "CAR" },
         fuelType: {
           type: String,
           enum: ["Petrol", "Diesel", "CNG", "EV"],

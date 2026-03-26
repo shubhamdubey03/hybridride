@@ -37,8 +37,8 @@ export const publishRide = async (req, res) => {
                 location: { type: 'Point', coordinates: destinationCoords || [0, 0] }
             },
             scheduledTime: new Date(scheduledTime),
-            vehicle: vehicle || 'Sedan',
-            vehicleType: vehicleType || 'CAR',
+            vehicle: vehicle || 'Standard Vehicle',
+            vehicleType: (vehicleType?.toUpperCase() === 'SEDAN' || !vehicleType) ? 'CAR' : vehicleType.toUpperCase(),
             totalSeats: Number(totalSeats),
             availableSeats: Number(totalSeats),
             pricePerSeat: Number(pricePerSeat),
