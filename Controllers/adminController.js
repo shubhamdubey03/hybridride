@@ -413,6 +413,67 @@ export const getAllTransactions = async (req, res) => {
     }
 };
 
+// Get ride history for a specific driver
+export const getDriverRides = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status } = req.query;
+
+        // 1. Fetch on-demand bookings
+        let bookingQuery = { driver: id };
+        if (status && status !== 'all') {
+            bookingQuery.status = status;
+        }
+
+        const bookings = await Booking.find(bookingQuery)
+            .populate('passenger', 'name phone email')
+            .sort({ createdAt: -1 });
+
+        // Transform bookings for consistent output
+        const formattedBookings = bookings.map(b => ({
+            id: b._id,
+            passenger: b.passenger?.name || 'Unknown',
+            driver: req.params.id, // for consistency if needed
+            from: b.pickup?.address || 'N/A',
+            to: b.dropoff?.address || 'N/A',
+            date: new Date(b.createdAt).toISOString().split('T')[0],
+            time: new Date(b.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            amount: b.finalFare || b.offeredFare || 0,
+            status: b.status,
+            type: 'on-demand'
+        }));
+
+        // 2. Fetch pooling rides (host)
+        let poolQuery = { host: id };
+        if (status && status !== 'all') {
+            poolQuery.status = status;
+        }
+        
+        const pools = await Ride.find(poolQuery).sort({ createdAt: -1 });
+        
+        // Transform pools for consistent output
+        const formattedPools = pools.map(p => ({
+            id: p._id,
+            passenger: `${p.passengers.length} Bookings`,
+            driver: req.params.id,
+            from: p.origin?.name || 'N/A',
+            to: p.destination?.name || 'N/A',
+            date: new Date(p.scheduledTime).toISOString().split('T')[0],
+            time: new Date(p.scheduledTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            amount: p.passengers.reduce((acc, curr) => acc + (curr.seatsBooked * p.pricePerSeat), 0),
+            status: p.status,
+            type: 'pooling'
+        }));
+
+        const allRides = [...formattedBookings, ...formattedPools].sort((a, b) => new Date(b.date + ' ' + b.time) - new Date(a.date + ' ' + a.time));
+
+        res.json({ success: true, count: allRides.length, data: allRides });
+    } catch (error) {
+        console.error('getDriverRides error:', error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+};
+
 // Placeholder for refund actions (to be implemented with specific refund logic)
 export const handleRefundAction = async (req, res) => {
     try {
