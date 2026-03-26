@@ -85,7 +85,7 @@ export const getMyWallet = async (req, res) => {
         res.status(200).json({
             success: true,
             balance: user.walletBalance,
-            transactions: wallet.transactions.sort((a,b) => b.date - a.date)
+            transactions: wallet.transactions.sort((a,b) => b.timestamp - a.timestamp)
         });
     } catch (error) {
         console.error("Get Wallet Error:", error);
