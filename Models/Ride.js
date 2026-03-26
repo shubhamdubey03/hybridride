@@ -113,6 +113,16 @@ const rideSchema = new mongoose.Schema(
 
         otp: { type: String },
         cancellationReason: { type: String },
+        paymentMethod: {
+          type: String,
+          enum: ["cash", "wallet"],
+          default: "cash",
+        },
+        paymentStatus: {
+          type: String,
+          enum: ["pending", "completed"],
+          default: "pending",
+        },
       },
     ],
 

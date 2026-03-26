@@ -225,8 +225,8 @@ export const getFinancialOverview = async (req, res) => {
             { $group: {
                 _id: null,
                 totalCollection: { $sum: '$finalFare' },
-                totalCommission: { $sum: { $multiply: ['$finalFare', 0.15] } }, // Assuming 15% flat commission for now
-                totalPayouts: { $sum: { $multiply: ['$finalFare', 0.85] } }
+                totalCommission: { $sum: { $multiply: ['$finalFare', 0.02] } }, // 2% flat commission
+                totalPayouts: { $sum: { $multiply: ['$finalFare', 0.98] } }
             }}
         ]);
 

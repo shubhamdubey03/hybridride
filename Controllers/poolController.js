@@ -118,7 +118,7 @@ export const searchRides = async (req, res) => {
 // @access Private (Passenger)
 export const bookSeat = async (req, res) => {
     try {
-        const { seats = 1 } = req.body;
+        const { seats = 1, paymentMethod = 'cash' } = req.body;
         const rideId = req.params.id;
 
         const ride = await Ride.findById(rideId);
@@ -149,7 +149,9 @@ export const bookSeat = async (req, res) => {
             seatsBooked: seats,
             bookingStatus: 'confirmed',
             pickupStatus: 'pending',
-            otp: pickupOtp
+            otp: pickupOtp,
+            paymentMethod: paymentMethod || 'cash',
+            paymentStatus: 'pending'
         });
 
         await ride.save();
@@ -240,6 +242,73 @@ export const updatePoolStatus = async (req, res) => {
         if (req.body.cancellationReason) {
             ride.cancellationReason = req.body.cancellationReason;
         }
+
+        // Process payments if completed
+        if (status === 'completed') {
+            const host = await User.findById(ride.host);
+            let hostWallet = await Wallet.findOne({ user: ride.host });
+            if (!hostWallet) {
+                hostWallet = await Wallet.create({ user: ride.host, balance: 0 });
+            }
+
+            for (let p of ride.passengers) {
+                if (p.bookingStatus === 'confirmed' || p.bookingStatus === 'completed') {
+                    const totalAmount = p.seatsBooked * ride.pricePerSeat;
+                    const commission = totalAmount * 0.02;
+                    const driverNetEarning = totalAmount - commission;
+
+                    // Increment host earnings
+                    host.driverDetails.earnings = (host.driverDetails.earnings || 0) + totalAmount;
+
+                    if (p.paymentMethod === 'wallet') {
+                        // 1. Deduct from passenger
+                        const passenger = await User.findById(p.user);
+                        if (passenger) {
+                            passenger.walletBalance -= totalAmount;
+                            await passenger.save();
+
+                            let pWallet = await Wallet.findOne({ user: p.user });
+                            if (!pWallet) {
+                                pWallet = await Wallet.create({ user: p.user, balance: passenger.walletBalance });
+                            }
+                            pWallet.balance = passenger.walletBalance;
+                            pWallet.transactions.push({
+                                type: 'debit',
+                                amount: totalAmount,
+                                description: `Pool Payment (Ride ID: ${ride._id.toString().slice(-6).toUpperCase()})`,
+                                referenceId: ride._id
+                            });
+                            await pWallet.save();
+                        }
+
+                        // 2. Credit Driver
+                        host.walletBalance = (host.walletBalance || 0) + driverNetEarning;
+                        hostWallet.balance += driverNetEarning;
+                        hostWallet.transactions.push({
+                            type: 'credit',
+                            amount: driverNetEarning,
+                            description: `Pool Earning (Ride ID: ${ride._id.toString().slice(-6).toUpperCase()}) - 2% Fee deducted`,
+                            referenceId: ride._id
+                        });
+                    } else {
+                        // Cash payment: Deduct commission from driver wallet
+                        host.walletBalance = (host.walletBalance || 0) - commission;
+                        hostWallet.balance -= commission;
+                        hostWallet.transactions.push({
+                            type: 'debit',
+                            amount: commission,
+                            description: `Platform Commission (Ride ID: ${ride._id.toString().slice(-6).toUpperCase()}) for Cash Pool`,
+                            referenceId: ride._id
+                        });
+                    }
+                    p.bookingStatus = 'completed';
+                    p.paymentStatus = 'completed';
+                }
+            }
+            await host.save();
+            await hostWallet.save();
+        }
+
         await ride.save();
 
         return res.status(200).json({ success: true, message: `Ride status updated to ${status}`, data: ride });
