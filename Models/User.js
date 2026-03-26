@@ -97,6 +97,12 @@ const userSchema = new mongoose.Schema(
         outstationRatePerKm: { type: Number, default: 15 },
         nightCharge: { type: Number, default: 250 },
         allowNightStay: { type: Boolean, default: false }
+      },
+      bankDetails: {
+        accountNumber: { type: String, default: "" },
+        ifscCode: { type: String, default: "" },
+        bankName: { type: String, default: "" },
+        accountHolderName: { type: String, default: "" },
       }
     },
 

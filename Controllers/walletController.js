@@ -36,11 +36,9 @@ export const requestWithdrawal = async (req, res) => {
             status: method === 'instant' ? 'completed' : 'pending' // Instant is auto-completed in this mock
         });
 
-        // Deduct from driver balance
+        // Deduct from driver balance (Net)
         driver.walletBalance -= amount;
-        if (driver.driverDetails) {
-            driver.driverDetails.earnings = (driver.driverDetails.earnings || 0) - amount;
-        }
+        // Do NOT deduct from earnings (Gross) as it tracks total revenue
         await driver.save();
 
         // Log transaction in Wallet model
@@ -101,7 +99,7 @@ export const getMyWallet = async (req, res) => {
 export const getAllWithdrawals = async (req, res) => {
     try {
         const withdrawals = await Withdrawal.find()
-            .populate('driver', 'name email phone')
+            .populate('driver', 'name email phone driverDetails.bankDetails')
             .sort({ createdAt: -1 });
             
         res.status(200).json({ success: true, data: withdrawals });

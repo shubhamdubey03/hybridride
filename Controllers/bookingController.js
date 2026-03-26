@@ -252,8 +252,8 @@ export const updateRideStatus = async (req, res) => {
                     driverWallet = await Wallet.create({ user: booking.driver, balance: 0 });
                 }
 
-                if (booking.paymentMethod === 'wallet') {
-                    // Creadit Driver Wallet (Net Earning)
+                if (booking.paymentMethod === 'wallet' || true) { // Force wallet logic for Rapido flow
+                    // Credit Driver Wallet (Net Earning: 98%)
                     await User.findByIdAndUpdate(booking.driver, {
                         $inc: { walletBalance: driverNetEarning }
                     });
@@ -264,44 +264,30 @@ export const updateRideStatus = async (req, res) => {
                         description: `Ride Earning (ID: ${booking._id.toString().slice(-6).toUpperCase()}) - 2% Platform Fee deducted`,
                         referenceId: booking._id
                     });
-                } else if (booking.paymentMethod === 'cash') {
-                    // Deduct Commission from Driver Wallet (it becomes owed to platform)
-                    await User.findByIdAndUpdate(booking.driver, {
-                        $inc: { walletBalance: -commission }
-                    });
-                    driverWallet.balance -= commission;
-                    driverWallet.transactions.push({
-                        type: 'debit',
-                        amount: commission,
-                        description: `Platform Commission (ID: ${booking._id.toString().slice(-6).toUpperCase()}) for Cash Ride`,
-                        referenceId: booking._id
-                    });
-                }
+                } 
 
                 await driverWallet.save();
                 booking.earningsProcessed = true; 
             }
 
-            // Deduct from passenger wallet if wallet payment
-            if (booking.paymentMethod === 'wallet' && isPassenger) {
-                const passenger = await User.findById(booking.passenger);
-                if (passenger) {
-                    passenger.walletBalance -= booking.finalFare;
-                    await passenger.save();
+            // Deduct from passenger wallet (mandatory for all rides now)
+            const passenger = await User.findById(booking.passenger);
+            if (passenger) {
+                passenger.walletBalance -= booking.finalFare;
+                await passenger.save();
 
-                    let passengerWallet = await Wallet.findOne({ user: booking.passenger });
-                    if (!passengerWallet) {
-                        passengerWallet = await Wallet.create({ user: booking.passenger, balance: passenger.walletBalance });
-                    }
-                    passengerWallet.balance = passenger.walletBalance;
-                    passengerWallet.transactions.push({
-                        type: 'debit',
-                        amount: booking.finalFare,
-                        description: `Ride Payment (ID: ${booking._id.toString().slice(-6).toUpperCase()})`,
-                        referenceId: booking._id
-                    });
-                    await passengerWallet.save();
+                let passengerWallet = await Wallet.findOne({ user: booking.passenger });
+                if (!passengerWallet) {
+                    passengerWallet = await Wallet.create({ user: booking.passenger, balance: passenger.walletBalance });
                 }
+                passengerWallet.balance = passenger.walletBalance;
+                passengerWallet.transactions.push({
+                    type: 'debit',
+                    amount: booking.finalFare,
+                    description: `Ride Payment (ID: ${booking._id.toString().slice(-6).toUpperCase()})`,
+                    referenceId: booking._id
+                });
+                await passengerWallet.save();
             }
         }
         if (status === 'cancelled') {

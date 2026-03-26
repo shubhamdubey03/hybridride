@@ -16,7 +16,9 @@ import {
     getDriverWallets,
     getPassengerWallets,
     getAllTransactions,
-    getDriverRides
+    getDriverRides,
+    getWithdrawals,
+    updateWithdrawalStatus
 } from '../Controllers/adminController.js';
 
 const router = express.Router();
@@ -40,5 +42,7 @@ router.get('/pools', getAllPools);
 router.get('/pools/:id', getPoolById);
 router.get('/rides', getAllRides);
 router.get('/rides/:id', getRideById);
+router.get('/withdrawals', getWithdrawals);
+router.put('/withdrawals/:id', updateWithdrawalStatus);
 
 export default router;

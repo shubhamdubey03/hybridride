@@ -144,16 +144,7 @@ export const bookSeat = async (req, res) => {
         // Generate a random 4-digit OTP for passenger to give driver
         const pickupOtp = Math.floor(1000 + Math.random() * 9000).toString();
 
-        ride.passengers.push({
-            user: req.user._id,
-            seatsBooked: seats,
-            bookingStatus: 'confirmed',
-            pickupStatus: 'pending',
-            otp: pickupOtp,
-            paymentMethod: paymentMethod || 'cash',
-            paymentStatus: 'pending'
-        });
-
+ m 
         await ride.save();
 
         const updatedRide = await ride.populate([
@@ -260,7 +251,8 @@ export const updatePoolStatus = async (req, res) => {
                     // Increment host earnings
                     host.driverDetails.earnings = (host.driverDetails.earnings || 0) + totalAmount;
 
-                    if (p.paymentMethod === 'wallet') {
+                    // Force Wallet logic for all pooling bookings now
+                    if (p.paymentMethod === 'wallet' || true) {
                         // 1. Deduct from passenger
                         const passenger = await User.findById(p.user);
                         if (passenger) {
@@ -281,7 +273,7 @@ export const updatePoolStatus = async (req, res) => {
                             await pWallet.save();
                         }
 
-                        // 2. Credit Driver
+                        // 2. Credit Driver (Net: 98%)
                         host.walletBalance = (host.walletBalance || 0) + driverNetEarning;
                         hostWallet.balance += driverNetEarning;
                         hostWallet.transactions.push({
@@ -290,17 +282,7 @@ export const updatePoolStatus = async (req, res) => {
                             description: `Pool Earning (Ride ID: ${ride._id.toString().slice(-6).toUpperCase()}) - 2% Fee deducted`,
                             referenceId: ride._id
                         });
-                    } else {
-                        // Cash payment: Deduct commission from driver wallet
-                        host.walletBalance = (host.walletBalance || 0) - commission;
-                        hostWallet.balance -= commission;
-                        hostWallet.transactions.push({
-                            type: 'debit',
-                            amount: commission,
-                            description: `Platform Commission (Ride ID: ${ride._id.toString().slice(-6).toUpperCase()}) for Cash Pool`,
-                            referenceId: ride._id
-                        });
-                    }
+                    } 
                     p.bookingStatus = 'completed';
                     p.paymentStatus = 'completed';
                 }

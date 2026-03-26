@@ -199,6 +199,10 @@ export const getDashboardStats = async (req, res) => {
             }}
         ]);
 
+        const totalRevenue = (revenueStats[0]?.totalRevenue || 0) + (poolRevenueStats[0]?.totalRevenue || 0);
+        const totalCommission = totalRevenue * 0.02;
+        const totalPayouts = totalRevenue * 0.98;
+
         const stats = {
             totalPassengers,
             totalDrivers,
@@ -207,7 +211,9 @@ export const getDashboardStats = async (req, res) => {
             totalPools,
             activePools,
             dailyRevenue: (revenueStats[0]?.todayRevenue || 0) + (poolRevenueStats[0]?.todayRevenue || 0),
-            totalRevenue: (revenueStats[0]?.totalRevenue || 0) + (poolRevenueStats[0]?.totalRevenue || 0)
+            totalRevenue,
+            totalCommission,
+            totalPayouts
         };
 
         res.json({ success: true, data: stats });
@@ -244,7 +250,7 @@ export const getFinancialOverview = async (req, res) => {
         const poolData = poolStats[0] || { totalCollection: 0 };
 
         const totalCollection = rideData.totalCollection + poolData.totalCollection;
-        const totalCommission = (rideData.totalCollection * 0.15) + (poolData.totalCollection * 0.10); // Assuming 10% for pools
+        const totalCommission = totalCollection * 0.02; // Standard 2% Commission
         const totalPayouts = totalCollection - totalCommission;
         
         res.json({ success: true, data: {
@@ -483,6 +489,69 @@ export const handleRefundAction = async (req, res) => {
         res.json({ success: true, message: `Refund ${id} ${action}ed (Mocked)` });
     } catch (error) {
         console.error(error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+};
+// Get all withdrawal requests
+export const getWithdrawals = async (req, res) => {
+    try {
+        const { status } = req.query;
+        let query = {};
+        if (status) query.status = status;
+
+        const withdrawals = await Withdrawal.find(query)
+            .populate('driver', 'name email phone driverDetails.bankDetails')
+            .sort({ createdAt: -1 });
+
+        res.json({ success: true, count: withdrawals.length, data: withdrawals });
+    } catch (error) {
+        console.error('getWithdrawals error:', error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+};
+
+// Update withdrawal status (Approve/Reject)
+export const updateWithdrawalStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status, remark, transactionId } = req.body; // 'approved', 'rejected', 'completed'
+
+        const withdrawal = await Withdrawal.findById(id).populate('driver');
+        if (!withdrawal) {
+            return res.status(404).json({ success: false, message: 'Withdrawal request not found' });
+        }
+
+        if (withdrawal.status === 'completed' || withdrawal.status === 'rejected') {
+            return res.status(400).json({ success: false, message: 'Withdrawal already processed' });
+        }
+
+        withdrawal.status = status;
+        if (remark) withdrawal.remark = remark;
+        if (transactionId) withdrawal.transactionId = transactionId;
+
+        // If rejected, refund the driver's wallet
+        if (status === 'rejected') {
+            const driver = await User.findById(withdrawal.driver._id);
+            driver.walletBalance += withdrawal.amount;
+            await driver.save();
+
+            let wallet = await Wallet.findOne({ user: driver._id });
+            if (wallet) {
+                wallet.balance = driver.walletBalance;
+                wallet.transactions.push({
+                    type: 'credit',
+                    amount: withdrawal.amount,
+                    description: `Withdrawal Rejected: Refund for Request ID ${id.slice(-6).toUpperCase()}`,
+                    referenceId: id
+                });
+                await wallet.save();
+            }
+        }
+
+        await withdrawal.save();
+        res.json({ success: true, message: `Withdrawal ${status} successfully`, data: withdrawal });
+    } catch (error) {
+        console.error('updateWithdrawalStatus error:', error);
         res.status(500).json({ success: false, message: 'Server Error' });
     }
 };
