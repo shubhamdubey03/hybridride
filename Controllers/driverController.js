@@ -24,7 +24,7 @@ export const getDriverProfile = async (req, res) => {
 // @access  Private (Driver)
 export const updateDriverProfile = async (req, res) => {
     try {
-        const { name, phone, email, vehicle, licenseNumber, documents } = req.body || {};
+        const { name, phone, email, vehicle, licenseNumber, documents, bankDetails } = req.body || {};
         const user = await User.findById(req.user._id);
 
         if (!user) {
@@ -55,6 +55,13 @@ export const updateDriverProfile = async (req, res) => {
             user.driverDetails.documents = {
                 ...user.driverDetails.documents,
                 ...documents
+            };
+        }
+
+        if (bankDetails) {
+            user.driverDetails.bankDetails = {
+                ...user.driverDetails.bankDetails,
+                ...bankDetails
             };
         }
 

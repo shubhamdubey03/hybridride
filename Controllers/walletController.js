@@ -7,14 +7,19 @@ import Wallet from '../Models/Wallet.js';
 // @access  Private (Driver)
 export const requestWithdrawal = async (req, res) => {
     try {
-        const { amount, method, bankDetails } = req.body;
+        let { amount, method, bankDetails } = req.body;
         const driverId = req.user._id;
 
-        if (req.user.role !== 'driver') {
-            return res.status(403).json({ success: false, message: "Only drivers can request withdrawals" });
+        const driver = await User.findById(driverId);
+
+        // Fallback to profile bank details if not provided
+        if (!bankDetails && driver.driverDetails?.bankDetails?.accountNumber) {
+            bankDetails = driver.driverDetails.bankDetails;
         }
 
-        const driver = await User.findById(driverId);
+        if (!bankDetails) {
+            return res.status(400).json({ success: false, message: "Please provide bank details in your profile first" });
+        }
         if (driver.walletBalance < amount) {
             return res.status(400).json({ success: false, message: "Insufficient balance" });
         }
