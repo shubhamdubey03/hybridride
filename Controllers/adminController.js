@@ -500,7 +500,7 @@ export const getWithdrawals = async (req, res) => {
         if (status) query.status = status;
 
         const withdrawals = await Withdrawal.find(query)
-            .populate('driver', 'name email phone driverDetails.bankDetails')
+            .populate('driver', 'name email phone walletBalance driverDetails.bankDetails')
             .sort({ createdAt: -1 });
 
         res.json({ success: true, count: withdrawals.length, data: withdrawals });
@@ -529,27 +529,51 @@ export const updateWithdrawalStatus = async (req, res) => {
         if (remark) withdrawal.remark = remark;
         if (transactionId) withdrawal.transactionId = transactionId;
 
-        // If rejected, refund the driver's wallet
-        if (status === 'rejected') {
-            const driver = await User.findById(withdrawal.driver._id);
-            driver.walletBalance += withdrawal.amount;
+        const driver = await User.findById(withdrawal.driver._id);
+        if (!driver) {
+            return res.status(404).json({ success: false, message: 'Driver not found' });
+        }
+
+        // --- Handle Approval (Deduct Funds) ---
+        if (status === 'approved' || status === 'completed') {
+            // Check if we already deducted (To prevent double deduction if calling twice)
+            if (withdrawal.processedAt) {
+                 return res.status(400).json({ success: false, message: 'Withdrawal already processed and deducted' });
+            }
+
+            if (driver.walletBalance < withdrawal.amount) {
+                // Should not happen with pending check, but good for safety
+                return res.status(400).json({ success: false, message: `Insufficient driver balance (Current: ₹${driver.walletBalance})` });
+            }
+
+            driver.walletBalance -= withdrawal.amount;
             await driver.save();
 
             let wallet = await Wallet.findOne({ user: driver._id });
-            if (wallet) {
-                wallet.balance = driver.walletBalance;
-                wallet.transactions.push({
-                    type: 'credit',
-                    amount: withdrawal.amount,
-                    description: `Withdrawal Rejected: Refund for Request ID ${id.slice(-6).toUpperCase()}`,
-                    referenceId: id
-                });
-                await wallet.save();
+            if (!wallet) {
+                wallet = await Wallet.create({ user: driver._id, balance: driver.walletBalance });
             }
+            wallet.balance = driver.walletBalance;
+            wallet.transactions.push({
+                type: 'debit',
+                amount: withdrawal.amount,
+                description: `Withdrawal Settled: Request ID ${id.slice(-6).toUpperCase()}`,
+                referenceId: id
+            });
+            await wallet.save();
+            
+            withdrawal.status = 'completed'; // Ensure final state is completed
+            withdrawal.processedAt = new Date();
         }
 
+        // --- Handle Rejection (No deduction needed now since we didn't deduct on request) ---
+        // If we previously deducted on request, we would refund here. 
+        // But in this new flow, rejection just means the balance stays as is.
+        // If we wanted to "unlock" something, we would, but here the "Pending Check" in walletController 
+        // will be cleared once this withdrawal is no longer 'pending'.
+
         await withdrawal.save();
-        res.json({ success: true, message: `Withdrawal ${status} successfully`, data: withdrawal });
+        res.json({ success: true, message: `Withdrawal ${status} successfully and wallet updated`, data: withdrawal });
     } catch (error) {
         console.error('updateWithdrawalStatus error:', error);
         res.status(500).json({ success: false, message: 'Server Error' });

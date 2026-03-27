@@ -20,8 +20,15 @@ export const requestWithdrawal = async (req, res) => {
         if (!bankDetails) {
             return res.status(400).json({ success: false, message: "Please provide bank details in your profile first" });
         }
-        if (driver.walletBalance < amount) {
-            return res.status(400).json({ success: false, message: "Insufficient balance" });
+
+        // Check for existing pending withdrawal
+        const existingPending = await Withdrawal.findOne({ driver: driverId, status: 'pending' });
+        if (existingPending) {
+            return res.status(400).json({ success: false, message: "You already have a pending withdrawal request. Please wait for admin approval." });
+        }
+
+        if (driver.walletBalance < amount || amount < 100) {
+            return res.status(400).json({ success: false, message: amount < 100 ? "Minimum withdrawal is ₹100" : "Insufficient balance" });
         }
 
         let fee = 0;
@@ -38,34 +45,17 @@ export const requestWithdrawal = async (req, res) => {
             netAmount,
             method,
             bankDetails,
-            status: method === 'instant' ? 'completed' : 'pending' // Instant is auto-completed in this mock
+            status: 'pending' 
         });
 
-        // Deduct from driver balance (Net)
-        driver.walletBalance -= amount;
-        // Do NOT deduct from earnings (Gross) as it tracks total revenue
-        await driver.save();
-
-        // Log transaction in Wallet model
-        let wallet = await Wallet.findOne({ user: driverId });
-        if (!wallet) {
-            wallet = await Wallet.create({ user: driverId, balance: driver.walletBalance });
-        }
-        
-        wallet.balance = driver.walletBalance;
-        wallet.transactions.push({
-            type: 'debit',
-            amount: amount,
-            description: `Withdrawal (${method})${fee > 0 ? ' - 2% fee applied' : ''}`,
-            referenceId: withdrawal._id
-        });
-        await wallet.save();
+        // NOTE: We no longer deduct on request. 
+        // Logic moved to adminController.js during approval phase as requested by user.
 
         res.status(200).json({
             success: true,
-            message: method === 'instant' ? "Instant withdrawal successful (2% fee deducted)" : "Withdrawal request submitted",
+            message: "Withdrawal request submitted successfully. Balance will be deducted once admin approves.",
             data: withdrawal,
-            newBalance: driver.walletBalance
+            newBalance: driver.walletBalance // Still the same
         });
 
     } catch (error) {
@@ -82,13 +72,10 @@ export const getMyWallet = async (req, res) => {
         const userId = req.user._id;
         let user = await User.findById(userId);
         
-        // Lazy Sync for Drivers: If they have gross earnings but 0 wallet balance, 
-        // Sync the 98% share to make it withdrawable as requested.
-        if (user.role === 'driver' && user.driverDetails?.earnings > 0 && user.walletBalance === 0) {
-            user.walletBalance = Math.round(user.driverDetails.earnings * 0.98 * 100) / 100;
-            await user.save();
-            console.log(`Synced wallet balance for driver ${user.name}: ₹${user.walletBalance}`);
-        }
+        // Removed Lazy Sync as it was refilling wallets incorrectly after withdrawal requests.
+        // Balances are now strictly updated via ride completion or admin approval.
+        
+        const hasPending = await Withdrawal.findOne({ driver: userId, status: 'pending' });
         
         let wallet = await Wallet.findOne({ user: userId });
         if (!wallet) {
@@ -98,6 +85,7 @@ export const getMyWallet = async (req, res) => {
         res.status(200).json({
             success: true,
             balance: user.walletBalance,
+            hasPending: !!hasPending,
             transactions: wallet.transactions.sort((a,b) => b.timestamp - a.timestamp)
         });
     } catch (error) {
