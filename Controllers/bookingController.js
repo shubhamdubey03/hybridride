@@ -105,14 +105,33 @@ export const requestRide = async (req, res) => {
 };
 
 // ─── 2. GET /api/bookings/nearby ───────────────────────────
-// Driver sees all pending ride requests (no geo-filter for now, simple approach)
+// Driver sees only pending ride requests that match THEIR vehicle type.
+// A bike driver sees BIKE bookings only, a car driver sees CAR bookings only.
 // @access Private (Driver)
 export const getNearbyRides = async (req, res) => {
     try {
-        const { vehicleType } = req.query;
+        // Load the driver's full profile to get their registered vehicle type
+        const driver = await User.findById(req.user._id).select('driverDetails');
+        const driverVehicleType = driver?.driverDetails?.vehicle?.type?.toUpperCase();
 
-        const query = { status: 'pending', driver: null };
-        if (vehicleType) query.vehicleType = vehicleType;
+        if (!driverVehicleType) {
+            return res.status(400).json({
+                success: false,
+                message: 'Your vehicle type is not set. Please complete your driver profile.'
+            });
+        }
+
+        // ─── Strict vehicle-type matching ─────────────────────────────────────
+        // Only show bookings that match THIS driver's vehicle type.
+        // Passengers who chose Car → only car drivers see the request.
+        // Passengers who chose Bike → only bike drivers see the request.
+        // Passengers who chose Auto → only auto drivers see the request.
+        const query = {
+            status: 'pending',
+            driver: null,
+            vehicleType: driverVehicleType  // ← enforced from driver's own profile
+        };
+        // ──────────────────────────────────────────────────────────────────────
 
         const rides = await Booking
             .find(query)
@@ -150,6 +169,22 @@ export const acceptRide = async (req, res) => {
         if (booking.status !== 'pending') {
             return res.status(409).json({ success: false, message: `Cannot accept. Ride is already ${booking.status}` });
         }
+
+        // ─── Vehicle type enforcement ──────────────────────────────────────────
+        // The driver's registered vehicle must match the passenger's chosen vehicle.
+        // This is the server-side guard — the frontend already filters,
+        // but this ensures no driver can accept a mismatched booking.
+        const driver = await User.findById(req.user._id).select('driverDetails');
+        const driverVehicleType = driver?.driverDetails?.vehicle?.type?.toUpperCase();
+        const bookingVehicleType = booking.vehicleType?.toUpperCase();
+
+        if (driverVehicleType && bookingVehicleType && driverVehicleType !== bookingVehicleType) {
+            return res.status(403).json({
+                success: false,
+                message: `Vehicle mismatch. This ride requires a ${bookingVehicleType} but your registered vehicle is a ${driverVehicleType}.`
+            });
+        }
+        // ──────────────────────────────────────────────────────────────────────
 
         // Make sure driver doesn't have another active ride
         const driverBusy = await Booking.findOne({
