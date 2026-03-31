@@ -98,9 +98,20 @@ export const searchRides = async (req, res) => {
             };
         }
 
-        if (type) {
-            query.type = type.toLowerCase();
+        const normalizedType = type ? type.toLowerCase() : null;
+
+        if (normalizedType) {
+            query.type = normalizedType;
         }
+
+        // ─── Vehicle Eligibility Rules ─────────────────────────────────────────
+        // TRAVELER vehicles are large multi-seaters meant for outstation/rental only.
+        // They must NOT appear in city (local) pool searches — just like Rapido/Ola.
+        if (normalizedType === 'local') {
+            query.vehicleType = { $ne: 'TRAVELER' };
+        }
+        // For outstation/rental: all vehicle types (CAR, BIKE, TRAVELER) are allowed.
+        // ───────────────────────────────────────────────────────────────────────
 
         const rides = await Ride.find(query)
             .populate('host', 'name phone profileImage driverDetails')

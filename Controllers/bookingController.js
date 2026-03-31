@@ -53,6 +53,18 @@ export const requestRide = async (req, res) => {
             return res.status(409).json({ success: false, message: 'You already have an active ride', data: { bookingId: existingActive._id } });
         }
 
+        // ─── Vehicle Eligibility by Distance ─────────────────────────────────
+        // Bikes are suited for short city rides only (≤100 km).
+        // For distances > 100 km, only CAR is permitted — just like Rapido/Ola.
+        const tripDistanceKm = distanceKm || 0;
+        if (vehicleType === 'BIKE' && tripDistanceKm > 100) {
+            return res.status(400).json({
+                success: false,
+                message: 'Bikes are not available for trips over 100 km. Please select a Car for long-distance rides.'
+            });
+        }
+        // ─────────────────────────────────────────────────────────────────────
+
         // For city rides, use the base calculation.
         // For outstation/rental, trust the offeredFare from the frontend (which is based on driver's per/km rate)
         let estFare;
