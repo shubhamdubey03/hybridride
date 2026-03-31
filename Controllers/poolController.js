@@ -24,6 +24,23 @@ export const publishRide = async (req, res) => {
             return res.status(400).json({ success: false, message: 'All ride details (origin, destination, time, seats, price) are required' });
         }
 
+        // ─── Vehicle eligibility for pool type ───────────────────────────────────────────────────────────────────────
+        // BIKE and AUTO are city-only vehicles (max 100 km, local roads only).
+        // They cannot offer outstation or rental pools — just like Rapido/Ola rules.
+        const driverUser = await User.findById(req.user._id).select('driverDetails');
+        const driverVehicleType = driverUser?.driverDetails?.vehicle?.type?.toUpperCase() || '';
+        const rideTypeLower = (type || '').toLowerCase();
+        const isBikeOrAuto = driverVehicleType === 'BIKE' || driverVehicleType === 'AUTO';
+        const isLongDistancePool = rideTypeLower === 'outstation' || rideTypeLower === 'rental';
+
+        if (isBikeOrAuto && isLongDistancePool) {
+            return res.status(403).json({
+                success: false,
+                message: `${driverVehicleType === 'BIKE' ? 'Bikes' : 'Autos'} can only offer City Pools (local routes under 100 km). Outstation and Rental pools require a Car or Traveller.`
+            });
+        }
+        // ──────────────────────────────────────────────────────────────────────────────
+
         // Rentals enforce "All Seats Booked" pricing structure automatically via frontend mapping,
         // but backend creates it as a single pool block.
         const newRide = await Ride.create({
