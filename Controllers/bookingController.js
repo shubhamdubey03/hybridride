@@ -288,11 +288,14 @@ export const updateRideStatus = async (req, res) => {
             booking.startedAt = now;
         }
         if (status === 'completed') {
-            if (booking.status !== 'completed') {
-                booking.completedAt = now;
+            // CRITICAL FIX: Only run deduction and status updates IF NOT ALREADY COMPLETED
+            if (booking.status === 'completed') {
+                return res.json({ success: true, message: 'Ride already completed', data: booking });
             }
+
+            booking.completedAt = now;
             
-            // CRITICAL FIX: Only set paymentStatus to completed if the PASSENGER is the one updating
+            // Set paymentStatus to completed if the PASSENGER is the one updating
             // This ensures the ride remains "active" for the passenger until they finish the payment screen.
             if (isPassenger) {
                 booking.paymentStatus = 'completed';
@@ -322,8 +325,8 @@ export const updateRideStatus = async (req, res) => {
             // Add earning to driver's wallet (if not already added)
             if (booking.driver && !booking.earningsProcessed) {
                 const totalFare = booking.finalFare || booking.offeredFare || 0;
-                const commission = totalFare * 0.02;
-                const driverNetEarning = totalFare - commission;
+                const commission = 0; // 0% commission per user request
+                const driverNetEarning = totalFare; // Driver gets 100%
 
                 // Update Total Earnings (Aggregate)
                 await User.findByIdAndUpdate(booking.driver, {
@@ -337,7 +340,7 @@ export const updateRideStatus = async (req, res) => {
                 }
 
                 if (booking.paymentMethod === 'wallet' || true) { // Force wallet logic for Rapido flow
-                    // Credit Driver Wallet (Net Earning: 98%)
+                    // Credit Driver Wallet (Net Earning: 100%)
                     await User.findByIdAndUpdate(booking.driver, {
                         $inc: { walletBalance: driverNetEarning }
                     });
@@ -345,7 +348,7 @@ export const updateRideStatus = async (req, res) => {
                     driverWallet.transactions.push({
                         type: 'credit',
                         amount: driverNetEarning,
-                        description: `Ride Earning (ID: ${booking._id.toString().slice(-6).toUpperCase()}) - 2% Platform Fee deducted`,
+                        description: `Ride Earning (ID: ${booking._id.toString().slice(-6).toUpperCase()}) - 0% Platform Fee`,
                         referenceId: booking._id
                     });
                 } 

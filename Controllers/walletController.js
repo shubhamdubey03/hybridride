@@ -33,7 +33,7 @@ export const requestWithdrawal = async (req, res) => {
 
         let fee = 0;
         if (method === 'instant') {
-            fee = amount * 0.02; // 2% fee
+            fee = 0; // 0% fee per user request
         }
 
         const netAmount = amount - fee;

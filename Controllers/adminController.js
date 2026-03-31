@@ -200,8 +200,8 @@ export const getDashboardStats = async (req, res) => {
         ]);
 
         const totalRevenue = (revenueStats[0]?.totalRevenue || 0) + (poolRevenueStats[0]?.totalRevenue || 0);
-        const totalCommission = totalRevenue * 0.02;
-        const totalPayouts = totalRevenue * 0.98;
+        const totalCommission = 0; // 0% commission per user request
+        const totalPayouts = totalRevenue; // 100% to drivers
 
         const stats = {
             totalPassengers,
@@ -231,8 +231,8 @@ export const getFinancialOverview = async (req, res) => {
             { $group: {
                 _id: null,
                 totalCollection: { $sum: '$finalFare' },
-                totalCommission: { $sum: { $multiply: ['$finalFare', 0.02] } }, // 2% flat commission
-                totalPayouts: { $sum: { $multiply: ['$finalFare', 0.98] } }
+                totalCommission: { $sum: 0 }, // 0% commission
+                totalPayouts: { $sum: '$finalFare' }
             }}
         ]);
 
@@ -250,8 +250,8 @@ export const getFinancialOverview = async (req, res) => {
         const poolData = poolStats[0] || { totalCollection: 0 };
 
         const totalCollection = rideData.totalCollection + poolData.totalCollection;
-        const totalCommission = totalCollection * 0.02; // Standard 2% Commission
-        const totalPayouts = totalCollection - totalCommission;
+        const totalCommission = 0; // Standard 0% Commission
+        const totalPayouts = totalCollection;
         
         res.json({ success: true, data: {
             totalCollection,

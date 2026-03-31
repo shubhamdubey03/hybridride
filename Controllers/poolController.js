@@ -178,8 +178,9 @@ export const bookSeat = async (req, res) => {
             return res.status(400).json({ success: false, message: 'You have already booked a seat on this ride' });
         }
 
-        // ── Wallet balance check & immediate deduction ──────────────────────────────
-        // All rides are wallet-only. Deduct at booking time (not at completion).
+        // ── Wallet balance check (Pre-verification) ──────────────────────────────
+        // We check balance at booking to ensure the passenger can afford the trip,
+        // but we only deduct the funds after ride completion per latest requirements.
         const totalAmount = seats * ride.pricePerSeat;
         const passengerUser = await User.findById(req.user._id);
         if (!passengerUser) return res.status(404).json({ success: false, message: 'Passenger not found' });
@@ -189,18 +190,7 @@ export const bookSeat = async (req, res) => {
                 message: `Insufficient wallet balance. You need ₹${totalAmount} but have ₹${passengerUser.walletBalance || 0}. Please top up your wallet.`
             });
         }
-        passengerUser.walletBalance -= totalAmount;
-        await passengerUser.save();
-        // Log debit in Wallet
-        let pWallet = await Wallet.findOne({ user: req.user._id });
-        if (!pWallet) pWallet = await Wallet.create({ user: req.user._id, balance: passengerUser.walletBalance });
-        pWallet.balance = passengerUser.walletBalance;
-        pWallet.transactions.push({
-            type: 'debit', amount: totalAmount,
-            description: `Pool Seat Booking — ${seats} seat(s) (Ride: ${ride._id.toString().slice(-6).toUpperCase()})`,
-            referenceId: ride._id,
-        });
-        await pWallet.save();
+        // No immediate deduction here anymore. It moves to updatePoolStatus.
         // ────────────────────────────────────────────────────────────────────────────
 
         // Deduct seats and push to manifest
@@ -215,7 +205,7 @@ export const bookSeat = async (req, res) => {
             otp: pickupOtp,
             paymentMethod: 'wallet',
             bookingStatus: 'confirmed',
-            paymentStatus: 'paid',
+            paymentStatus: 'pending', // Payment will be 'paid' after ride completion
         });
         await ride.save();
 
@@ -226,9 +216,9 @@ export const bookSeat = async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            message: 'Seat booked and payment deducted from wallet',
+            message: 'Seat reserved. Payment will be deducted after ride completion.',
             otp: pickupOtp,
-            amountPaid: totalAmount,
+            estimatedFare: totalAmount,
             walletBalance: passengerUser.walletBalance,
             data: updatedRide,
         });
@@ -325,16 +315,14 @@ export const updatePoolStatus = async (req, res) => {
             for (let p of ride.passengers) {
                 if (p.bookingStatus === 'confirmed' || p.bookingStatus === 'completed') {
                     const totalAmount = p.seatsBooked * ride.pricePerSeat;
-                    const commission = totalAmount * 0.02;
-                    const driverNetEarning = totalAmount - commission;
+                    const commission = 0; // 0% commission per user request
+                    const driverNetEarning = totalAmount; // Driver gets 100%
 
                     // Increment host earnings
                     host.driverDetails.earnings = (host.driverDetails.earnings || 0) + totalAmount;
 
-                    // Force Wallet logic only for wallet/razorpay payers
-                    // Cash payers settle directly with host — no wallet action needed
                     if (p.paymentMethod === 'wallet' || p.paymentMethod === 'razorpay') {
-                        // 1. Deduct from passenger
+                        // 1. Deduct from passenger (restored flow: deduction happens at trip completion)
                         const passenger = await User.findById(p.user);
                         if (passenger) {
                             passenger.walletBalance -= totalAmount;
@@ -354,13 +342,13 @@ export const updatePoolStatus = async (req, res) => {
                             await pWallet.save();
                         }
 
-                        // 2. Credit Driver (Net: 98%)
+                        // 2. Credit Driver (Net: 100%)
                         host.walletBalance = (host.walletBalance || 0) + driverNetEarning;
                         hostWallet.balance += driverNetEarning;
                         hostWallet.transactions.push({
                             type: 'credit',
                             amount: driverNetEarning,
-                            description: `Pool Earning (Ride ID: ${ride._id.toString().slice(-6).toUpperCase()}) - 2% Fee deducted`,
+                            description: `Pool Earning (Ride ID: ${ride._id.toString().slice(-6).toUpperCase()}) - 0% Fee`,
                             referenceId: ride._id
                         });
                     } 
