@@ -54,13 +54,14 @@ export const requestRide = async (req, res) => {
         }
 
         // ─── Vehicle Eligibility by Distance ─────────────────────────────────
-        // Bikes are suited for short city rides only (≤100 km).
-        // For distances > 100 km, only CAR is permitted — just like Rapido/Ola.
+        // Bikes and Autos are city-only vehicles (≤100 km).
+        // For distances > 100 km, only CAR is permitted — just like Rapido/Ola/Uber.
         const tripDistanceKm = distanceKm || 0;
-        if (vehicleType === 'BIKE' && tripDistanceKm > 100) {
+        if ((vehicleType === 'BIKE' || vehicleType === 'AUTO') && tripDistanceKm > 100) {
+            const vehicleLabel = vehicleType === 'BIKE' ? 'Bikes' : 'Autos';
             return res.status(400).json({
                 success: false,
-                message: 'Bikes are not available for trips over 100 km. Please select a Car for long-distance rides.'
+                message: `${vehicleLabel} are not available for trips over 100 km. Please select a Car for long-distance rides.`
             });
         }
         // ─────────────────────────────────────────────────────────────────────
