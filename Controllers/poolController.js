@@ -130,8 +130,19 @@ export const searchRides = async (req, res) => {
 // @access Private (Passenger)
 export const bookSeat = async (req, res) => {
     try {
-        const { seats = 1, paymentMethod = 'cash' } = req.body;
+        const { seats = 1, paymentMethod = 'razorpay' } = req.body;
         const rideId = req.params.id;
+
+        // ── Cash NOT allowed for pooling ──────────────────────────────────────────────────────────
+        // Outstation pooling and all Ride pools require Razorpay payment.
+        // The frontend handles the Razorpay checkout BEFORE calling this endpoint.
+        if (paymentMethod === 'cash') {
+            return res.status(400).json({
+                success: false,
+                message: 'Cash is not accepted for pool bookings. Please pay via Razorpay.'
+            });
+        }
+        // ──────────────────────────────────────────────────────────────────────
 
         const ride = await Ride.findById(rideId);
         if (!ride) return res.status(404).json({ success: false, message: 'Ride not found' });
@@ -150,13 +161,42 @@ export const bookSeat = async (req, res) => {
             return res.status(400).json({ success: false, message: 'You have already booked a seat on this ride' });
         }
 
+        // ── Wallet balance check & immediate deduction ──────────────────────────────
+        // All rides are wallet-only. Deduct at booking time (not at completion).
+        const totalAmount = seats * ride.pricePerSeat;
+        const passengerUser = await User.findById(req.user._id);
+        if (!passengerUser) return res.status(404).json({ success: false, message: 'Passenger not found' });
+        if ((passengerUser.walletBalance || 0) < totalAmount) {
+            return res.status(402).json({
+                success: false,
+                message: `Insufficient wallet balance. You need ₹${totalAmount} but have ₹${passengerUser.walletBalance || 0}. Please top up your wallet.`
+            });
+        }
+        passengerUser.walletBalance -= totalAmount;
+        await passengerUser.save();
+        // Log debit in Wallet
+        let pWallet = await Wallet.findOne({ user: req.user._id });
+        if (!pWallet) pWallet = await Wallet.create({ user: req.user._id, balance: passengerUser.walletBalance });
+        pWallet.balance = passengerUser.walletBalance;
+        pWallet.transactions.push({
+            type: 'debit', amount: totalAmount,
+            description: `Pool Seat Booking — ${seats} seat(s) (Ride: ${ride._id.toString().slice(-6).toUpperCase()})`,
+            referenceId: ride._id,
+        });
+        await pWallet.save();
+        // ────────────────────────────────────────────────────────────────────────────
+
         // Deduct seats and push to manifest
         ride.availableSeats -= seats;
-        
-        // Generate a random 4-digit OTP for passenger to give driver
         const pickupOtp = Math.floor(1000 + Math.random() * 9000).toString();
-
- m 
+        ride.passengers.push({
+            user: req.user._id,
+            seatsBooked: seats,
+            otp: pickupOtp,
+            paymentMethod: 'wallet',
+            bookingStatus: 'confirmed',
+            paymentStatus: 'paid',
+        });
         await ride.save();
 
         const updatedRide = await ride.populate([
@@ -164,7 +204,15 @@ export const bookSeat = async (req, res) => {
             { path: 'passengers.user', select: 'name phone profileImage' }
         ]);
 
-        return res.status(200).json({ success: true, message: 'Seat booked successfully', data: updatedRide });
+        return res.status(200).json({
+            success: true,
+            message: 'Seat booked and payment deducted from wallet',
+            otp: pickupOtp,
+            amountPaid: totalAmount,
+            walletBalance: passengerUser.walletBalance,
+            data: updatedRide,
+        });
+
     } catch (error) {
         console.error('bookSeat error:', error);
         return res.status(500).json({ success: false, message: 'Failed to book seat' });
@@ -263,8 +311,9 @@ export const updatePoolStatus = async (req, res) => {
                     // Increment host earnings
                     host.driverDetails.earnings = (host.driverDetails.earnings || 0) + totalAmount;
 
-                    // Force Wallet logic for all pooling bookings now
-                    if (p.paymentMethod === 'wallet' || true) {
+                    // Force Wallet logic only for wallet/razorpay payers
+                    // Cash payers settle directly with host — no wallet action needed
+                    if (p.paymentMethod === 'wallet' || p.paymentMethod === 'razorpay') {
                         // 1. Deduct from passenger
                         const passenger = await User.findById(p.user);
                         if (passenger) {

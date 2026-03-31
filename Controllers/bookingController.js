@@ -77,6 +77,19 @@ export const requestRide = async (req, res) => {
 
         const finalCalculatedFare = offeredFare || estFare;
 
+        // ─── Wallet balance check ───────────────────────────────────────────────────────────────────────
+        // All rides are wallet-only. Cash is not accepted on HybridRide.
+        // Check balance BEFORE creating the booking to prevent negative wallets.
+        const requiredAmount = offeredFare || estFare;
+        const passenger = await User.findById(req.user._id).select('walletBalance');
+        if ((passenger?.walletBalance || 0) < requiredAmount) {
+            return res.status(402).json({
+                success: false,
+                message: `Insufficient wallet balance. You need ₹${requiredAmount} but have ₹${passenger?.walletBalance || 0}. Please top up your wallet.`
+            });
+        }
+        // ──────────────────────────────────────────────────────────────────────────────
+
         const booking = await Booking.create({
             passenger:     req.user._id,
             pickup:        { address: pickupAddress,  coordinates: pickupCoords  },
@@ -89,7 +102,7 @@ export const requestRide = async (req, res) => {
             estimatedFare: estFare,
             offeredFare:   offeredFare  || estFare,
             finalFare:     finalCalculatedFare,
-            paymentMethod: paymentMethod || 'cash',
+            paymentMethod: 'wallet', // Always wallet — cash not accepted
         });
 
         return res.status(201).json({ success: true, message: 'Ride requested successfully', data: booking });
