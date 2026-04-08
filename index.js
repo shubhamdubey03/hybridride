@@ -29,14 +29,25 @@ app.get('/', (req, res) => {
     res.json({ success: true, message: 'HybridRide API is running 🚗' });
 });
 
+// ─── Network Test Route ────────────────────────────────────────
+app.get('/test', (req, res) => {
+    res.json({ 
+        success: true, 
+        message: 'Network connection successful! 🚀',
+        ip: req.ip,
+        time: new Date().toISOString()
+    });
+});
+
+
 // ─── API Routes ────────────────────────────────────────────────
-app.use('/api/auth',     authRoutes);
-app.use('/api/driver',   driverRoutes);
-app.use('/api/admin',    adminRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/driver', driverRoutes);
+app.use('/api/admin', adminRoutes);
 app.use('/api/bookings', bookingRoutes);
-app.use('/api/pools',    poolRoutes);
+app.use('/api/pools', poolRoutes);
 app.use('/api/payments', paymentRoutes);
-app.use('/api/wallet',   walletRoutes);
+app.use('/api/wallet', walletRoutes);
 app.use('/uploads', express.static('uploads'));
 
 // ─── 404 handler ──────────────────────────────────────────────
@@ -52,4 +63,4 @@ app.use((err, req, res, next) => {
 
 // ─── Start ─────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
+app.listen(PORT, '0.0.0.0', () => console.log(`✅ Server running on port ${PORT}`));

@@ -5,7 +5,7 @@ import User from '../Models/User.js';
 import { sendSMS, sendPersonalizedSMS } from '../Utils/smsService.js';
 import { sendWhatsAppOTP } from '../Utils/whatsappService.js';
 
-const googleClient = new OAuth2Client('110831328035-bqft18nqtfk06o3qrc78d414s731m8b5.apps.googleusercontent.com');
+const googleClient = new OAuth2Client('197183880790-71av0ri5ibs7beab34kqj9qkjfv4tr1j.apps.googleusercontent.com');
 
 // ─── Helper ────────────────────────────────────────────────────
 const generateToken = (id) =>
@@ -144,7 +144,9 @@ export const register = async (req, res) => {
 // @access Public
 export const login = async (req, res) => {
     try {
+        console.log(";;;;;;;;;;;;;;;;;;;;;;;;;;;;")
         const { email, phone, password } = req.body;
+        console.log(";;;;;", req.body)
 
         if (!password || (!email && !phone)) {
             return sendError(res, 400, 'Please provide (email or phone) and password');
@@ -190,19 +192,19 @@ export const login = async (req, res) => {
         // Send SMS
         const message = `Your OTP for HybridRide login is ${otp}. Valid for 10 minutes.`;
         const templateId = process.env.SMS_TEMPLATE_ID || 123;
-        
+
         try {
             // Using personalized method with message fallback for raw mode support
             await sendPersonalizedSMS([
-                { 
-                    number: user.phone, 
-                    name: user.name.split(' ')[0], 
-                    otp: otp 
+                {
+                    number: user.phone,
+                    name: user.name.split(' ')[0],
+                    otp: otp
                 }
-            ], 
-            process.env.SMS_TEMPLATE_ID === '123' ? null : process.env.SMS_TEMPLATE_ID,
-            "Dear {name}, your One Time Password (OTP) is {otp}. Please use this code to complete your verification. Do not share this OTP with anyone. This code is valid for a limited time only. Thank you.",
-            process.env.SMS_SENDER_ID || "SSGSPT"
+            ],
+                process.env.SMS_TEMPLATE_ID === '123' ? null : process.env.SMS_TEMPLATE_ID,
+                "Dear {name}, your One Time Password (OTP) is {otp}. Please use this code to complete your verification. Do not share this OTP with anyone. This code is valid for a limited time only. Thank you.",
+                process.env.SMS_SENDER_ID || "SSGSPT"
             );
 
             // 2. Send via WhatsApp (if configured)
@@ -345,6 +347,7 @@ export const googleLogin = async (req, res) => {
 export const whatsappLogin = async (req, res) => {
     try {
         const { phone } = req.body;
+        console.log("whatsapp login", req.body)
 
         if (!phone) {
             return sendError(res, 400, 'Please provide a phone number');
