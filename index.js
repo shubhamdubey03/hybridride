@@ -22,7 +22,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // ─── DB ────────────────────────────────────────────────────────
-await connectDB();
+connectDB();
 
 // ─── API Routes ────────────────────────────────────────────────
 app.get('/', (req, res) => {
