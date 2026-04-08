@@ -241,19 +241,24 @@ export const verifyOTP = async (req, res) => {
     try {
         const { phone, otp } = req.body;
 
-        if (!phone || !otp) {
-            return sendError(res, 400, 'Please provide phone and OTP');
-        }
-
+        console.log("DEBUG verifyOTP - Request phone:", phone);
+        console.log("DEBUG verifyOTP - Request otp:", otp);
+        
         const normalizedPhone = phone.replace(/\D/g, '').slice(-10);
+        console.log("DEBUG verifyOTP - Normalized phone:", normalizedPhone);
+
         const user = await User.findOne({ phone: new RegExp(normalizedPhone + '$') });
+        console.log("DEBUG verifyOTP - User found:", user ? user.phone : "NOT FOUND");
 
         // Bypass check for testing OTP '123456'
-        const isTestOtp = otp === '123456';
+        const isTestOtp = String(otp) === '123456';
+        console.log("DEBUG verifyOTP - Is Test OTP:", isTestOtp);
 
         if (!user || (!isTestOtp && (user.otp !== otp || user.otpExpires < new Date()))) {
+            console.log("DEBUG verifyOTP - Verification FAILED");
             return sendError(res, 401, 'Invalid or expired OTP');
         }
+        console.log("DEBUG verifyOTP - Verification SUCCESS");
 
         // --- NEW: Role Verification ---
         if (req.body.role && user.role !== req.body.role.toLowerCase()) {

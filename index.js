@@ -39,6 +39,10 @@ app.get('/test', (req, res) => {
     });
 });
 
+app.get('/version', (req, res) => {
+    res.json({ version: '1.0.1', deployedAt: '2026-04-08 19:20' });
+});
+
 
 // ─── API Routes ────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
