@@ -245,7 +245,8 @@ export const verifyOTP = async (req, res) => {
             return sendError(res, 400, 'Please provide phone and OTP');
         }
 
-        const user = await User.findOne({ phone });
+        const normalizedPhone = phone.replace(/\D/g, '').slice(-10);
+        const user = await User.findOne({ phone: new RegExp(normalizedPhone + '$') });
 
         // Bypass check for testing OTP '123456'
         const isTestOtp = otp === '123456';
