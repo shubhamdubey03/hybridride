@@ -179,8 +179,8 @@ export const login = async (req, res) => {
             });
         }
 
-        // Generate 6-digit OTP
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        // Generate 6-digit OTP (HARDCODED FOR TESTING)
+        const otp = '123456';
         const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
         user.otp = otp;
@@ -363,8 +363,8 @@ export const whatsappLogin = async (req, res) => {
         }
 
 
-        // Generate 6-digit OTP
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        // Generate 6-digit OTP (HARDCODED FOR TESTING)
+        const otp = '123456';
         const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
 
         user.otp = otp;
