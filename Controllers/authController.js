@@ -132,9 +132,7 @@ export const register = async (req, res) => {
         return sendError(
             res,
             500,
-            process.env.NODE_ENV === 'development'
-                ? `Registration failed: ${error.message}`
-                : 'Server error during registration'
+            `Registration failed: ${error.message}`
         );
     }
 };
