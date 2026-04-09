@@ -33,7 +33,13 @@ export const register = async (req, res) => {
             return sendError(res, 400, 'Please provide a password');
         }
 
-        const userExists = await User.findOne({ $or: [{ email }, { phone }] });
+        const normalizedPhone = phone.replace(/\D/g, '').slice(-10);
+        const userExists = await User.findOne({ 
+            $or: [
+                { email }, 
+                { phone: new RegExp(normalizedPhone + '$') }
+            ] 
+        });
         if (userExists) {
             console.log(`DEBUG: User already exists: ${email} / ${phone}`);
             return sendError(res, 409, 'User with this email or phone already exists');
@@ -150,7 +156,7 @@ export const login = async (req, res) => {
             return sendError(res, 400, 'Please provide (email or phone) and password');
         }
 
-        const query = email ? { email } : { phone };
+        const query = email ? { email } : { phone: new RegExp(phone.replace(/\D/g, '').slice(-10) + '$') };
         const user = await User.findOne(query);
 
         if (!user) {
@@ -239,32 +245,44 @@ export const login = async (req, res) => {
 // @access Public
 export const verifyOTP = async (req, res) => {
     try {
-        const { phone, otp } = req.body;
+        const { phone, otp, role } = req.body;
+
+        if (!phone || !otp) {
+            return sendError(res, 400, 'Please provide phone and OTP');
+        }
 
         console.log("DEBUG verifyOTP - Request phone:", phone);
         console.log("DEBUG verifyOTP - Request otp:", otp);
         
         const normalizedPhone = phone.replace(/\D/g, '').slice(-10);
-        console.log("DEBUG verifyOTP - Normalized phone:", normalizedPhone);
+        console.log("DEBUG verifyOTP - Normalized phone for search:", normalizedPhone);
 
+        // Search for user with phone ending in those 10 digits
         const user = await User.findOne({ phone: new RegExp(normalizedPhone + '$') });
-        console.log("DEBUG verifyOTP - User found:", user ? user.phone : "NOT FOUND");
+        
+        if (!user) {
+            console.log("DEBUG verifyOTP - User NOT FOUND in database for phone:", normalizedPhone);
+            return sendError(res, 404, 'User not found. Please register first.');
+        }
+
+        console.log("DEBUG verifyOTP - User found:", user.phone, "with role:", user.role);
 
         // Bypass check for testing OTP '123456'
         const isTestOtp = String(otp) === '123456';
         console.log("DEBUG verifyOTP - Is Test OTP:", isTestOtp);
 
-        if (!user || (!isTestOtp && (user.otp !== otp || user.otpExpires < new Date()))) {
-            console.log("DEBUG verifyOTP - Verification FAILED");
+        if (!isTestOtp && (user.otp !== otp || user.otpExpires < new Date())) {
+            console.log("DEBUG verifyOTP - Verification FAILED: Invalid or expired OTP");
             return sendError(res, 401, 'Invalid or expired OTP');
         }
+        
         console.log("DEBUG verifyOTP - Verification SUCCESS");
 
-        // --- NEW: Role Verification ---
-        if (req.body.role && user.role !== req.body.role.toLowerCase()) {
-            return sendError(res, 403, `Role mismatch during verification. This account is registered as a ${user.role}.`);
+        // --- Role Verification ---
+        if (role && user.role !== role.toLowerCase()) {
+            console.log(`DEBUG verifyOTP - Role mismatch: requested ${role}, user has ${user.role}`);
+            return sendError(res, 403, `This account is registered as a ${user.role}. Please log in through the correct section.`);
         }
-
 
         // Clear OTP
         user.otp = null;
@@ -360,7 +378,8 @@ export const whatsappLogin = async (req, res) => {
             return sendError(res, 400, 'Please provide a phone number');
         }
 
-        const user = await User.findOne({ phone: phone.replace(/\D/g, '').slice(-10) });
+        const normalizedPhone = phone.replace(/\D/g, '').slice(-10);
+        const user = await User.findOne({ phone: new RegExp(normalizedPhone + '$') });
 
         if (!user) {
             return sendError(res, 404, 'User not found. Please sign up first.');

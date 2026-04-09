@@ -17,6 +17,7 @@ const userSchema = new mongoose.Schema(
       unique: true,
       sparse: true, // Allows multiple null/undefined values for users who signed up via Google
       index: true,
+      trim: true,
     },
 
     password: {
