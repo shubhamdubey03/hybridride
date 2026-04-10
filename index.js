@@ -21,8 +21,21 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ─── DB ────────────────────────────────────────────────────────
-connectDB();
+// ─── DB Middleware ─────────────────────────────────────────────
+const dbMiddleware = async (req, res, next) => {
+    try {
+        await connectDB();
+        next();
+    } catch (error) {
+        res.status(500).json({ 
+            success: false, 
+            message: 'Database connection failed', 
+            error: error.message 
+        });
+    }
+};
+
+app.use(dbMiddleware);
 
 // ─── API Routes ────────────────────────────────────────────────
 app.get('/', (req, res) => {
