@@ -43,14 +43,9 @@ export const publishRide = async (req, res) => {
 
         // Rentals enforce "All Seats Booked" pricing structure automatically via frontend mapping,
         // but backend creates it as a single pool block.
-        // Helper to map UI types to model types
-        let normalizedType = type?.toLowerCase();
-        if (normalizedType === 'city') normalizedType = 'local';
-        if (normalizedType === 'outstation pool') normalizedType = 'outstation';
-
         const newRide = await Ride.create({
             host: req.user._id,
-            type: normalizedType || 'local', 
+            type: type || 'local', // Mapping 'City' -> 'local', 'Outstation' -> 'outstation'
             origin: {
                 name: originName,
                 location: { type: 'Point', coordinates: originCoords || [0, 0] }
@@ -84,48 +79,51 @@ export const publishRide = async (req, res) => {
 // @access Private (Passenger)
 export const searchRides = async (req, res) => {
     try {
-        const { type, date, fromCoords } = req.query;
-        let normalizedType = type?.toLowerCase();
-        if (normalizedType === 'city') normalizedType = 'local';
-        if (normalizedType === 'outstation pool') normalizedType = 'outstation';
+        const { type, date, fromCoords, toCoords } = req.query; // 'local', 'outstation', 'intercity', 'date'
 
-        const query = {
+        // Find rides that are upcoming, have seats, and optionally match the type filter
+        let query = {
             status: 'scheduled',
-            type: normalizedType || 'local',
             availableSeats: { $gt: 0 }
         };
 
         if (date) {
             const searchDate = new Date(date);
-            if (!isNaN(searchDate.getTime())) {
-                const startOfDay = new Date(searchDate.setHours(0, 0, 0, 0));
-                const endOfDay = new Date(searchDate.setHours(23, 59, 59, 999));
-                query.scheduledTime = { $gte: startOfDay, $lte: endOfDay };
-            } else {
-                console.warn(`Invalid date format received: ${date}`);
-                query.scheduledTime = { $gte: new Date() };
-            }
+            const startOfDay = new Date(searchDate.setHours(0, 0, 0, 0));
+            const endOfDay = new Date(searchDate.setHours(23, 59, 59, 999));
+            query.scheduledTime = { $gte: startOfDay, $lte: endOfDay };
         } else {
+            // Default: Upcoming rides from now
             query.scheduledTime = { $gte: new Date() };
         }
 
-        if (fromCoords && fromCoords !== '0,0') {
-            try {
-                const coordsArray = fromCoords.split(',').map(Number);
-                if (coordsArray.length === 2 && !isNaN(coordsArray[0]) && !isNaN(coordsArray[1])) {
-                    const [lng, lat] = coordsArray;
-                    query["origin.location"] = {
-                        $near: {
-                            $geometry: { type: "Point", coordinates: [lng, lat] },
-                            $maxDistance: normalizedType === 'local' ? 50000 : 100000 // 50km for local, 100km for outstation
-                        }
-                    };
+        if (fromCoords) {
+            const [lng, lat] = fromCoords.split(',').map(Number);
+            query["origin.location"] = {
+                $geoWithin: {
+                    $centerSphere: [[lng, lat], 10 / 6378.1] // 10km radius
                 }
-            } catch (err) {
-                console.error("Error parsing fromCoords:", err);
-            }
+            };
         }
 
+        if (toCoords) {
+            const [lng, lat] = toCoords.split(',').map(Number);
+            query["destination.location"] = {
+                $geoWithin: {
+                    $centerSphere: [[lng, lat], 20 / 6378.1] // 20km radius
+                }
+            };
+        }
+
+        const normalizedType = type ? type.toLowerCase() : null;
+
+        if (normalizedType) {
+            query.type = normalizedType;
+        }
+
+        // ─── Vehicle Eligibility Rules ─────────────────────────────────────────
+        // TRAVELER vehicles are large multi-seaters meant for outstation/rental only.
+        // They must NOT appear in city (local) pool searches — just like Rapido/Ola.
         if (normalizedType === 'local') {
             query.vehicleType = { $ne: 'TRAVELER' };
         }
