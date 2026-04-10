@@ -7,7 +7,7 @@ export const getDriverProfile = async (req, res) => {
     try {
         // req.user is set by auth middleware
         const user = await User.findById(req.user._id).select('-password');
-        
+
         if (!user) {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
@@ -38,16 +38,16 @@ export const updateDriverProfile = async (req, res) => {
 
         // Update driverDetails fields if provided
         if (licenseNumber) user.driverDetails.licenseNumber = licenseNumber;
-        
+
         // Handle boolean isOnline separately
         if (typeof req.body.isOnline !== 'undefined') {
             user.driverDetails.isOnline = req.body.isOnline;
         }
 
         if (vehicle) {
-            user.driverDetails.vehicle = { 
-                ...user.driverDetails.vehicle, 
-                ...vehicle 
+            user.driverDetails.vehicle = {
+                ...user.driverDetails.vehicle,
+                ...vehicle
             };
         }
 
@@ -63,6 +63,13 @@ export const updateDriverProfile = async (req, res) => {
                 ...user.driverDetails.bankDetails,
                 ...bankDetails
             };
+        }
+
+        // If a passenger provides driver-specific details, upgrade their role to 'driver'
+        if (user.role === 'passenger' && (vehicle || licenseNumber || documents || bankDetails)) {
+            console.log(`Upgrading user ${user._id} role to driver during profile update.`);
+            user.role = 'driver';
+            user.driverApprovalStatus = 'pending';
         }
 
         await user.save();
@@ -83,18 +90,18 @@ export const toggleOnline = async (req, res) => {
         const { isOnline } = req.body || {}; // Expect boolean
 
         if (isOnline !== undefined) {
-             user.driverDetails.isOnline = isOnline;
+            user.driverDetails.isOnline = isOnline;
         } else {
-             // Toggle if not specified
-             user.driverDetails.isOnline = !user.driverDetails.isOnline;
+            // Toggle if not specified
+            user.driverDetails.isOnline = !user.driverDetails.isOnline;
         }
 
         await user.save();
-        
-        res.json({ 
-            success: true, 
-            message: `You are now ${user.driverDetails.isOnline ? 'Online' : 'Offline'}`, 
-            data: { isOnline: user.driverDetails.isOnline } 
+
+        res.json({
+            success: true,
+            message: `You are now ${user.driverDetails.isOnline ? 'Online' : 'Offline'}`,
+            data: { isOnline: user.driverDetails.isOnline }
         });
     } catch (error) {
         console.error(error);
@@ -110,7 +117,7 @@ export const uploadDocument = async (req, res) => {
     try {
         console.log("DEBUG: Upload Request Body:", req.body);
         console.log("DEBUG: Upload File:", req.file);
-        
+
         if (!req.file) {
             return res.status(400).json({ success: false, message: 'No file uploaded' });
         }
@@ -120,30 +127,34 @@ export const uploadDocument = async (req, res) => {
         const validDocTypes = ['licenseFront', 'licenseBack', 'registration', 'insurance', 'aadharFront', 'aadharBack', 'panCard', 'permit', 'fitness', 'rc', 'profileImage'];
 
         if (!docType || !validDocTypes.includes(docType)) {
-             return res.status(400).json({ success: false, message: 'Invalid or missing docType' });
+            return res.status(400).json({ success: false, message: 'Invalid or missing docType' });
         }
 
-        // Security: Non-drivers can ONLY upload profileImage
+        // Security: If a passenger uploads a driver document, we automatically upgrade their role to 'driver' 
+        // as they are likely going through the driver registration process.
+        let targetRole = req.user.role;
         if (!isDriver && docType !== 'profileImage') {
-            return res.status(403).json({ success: false, message: 'Passengers can only upload profile images' });
+            console.log(`Upgrading user ${req.user._id} role from passenger to driver for document upload.`);
+            targetRole = 'driver';
         }
-        
+
         // Return the path - Cloudinary provides the full URL in req.file.path
         const filePath = req.file.path || `/uploads/${req.file.filename}`;
-        
+
         let updateQuery = {};
         if (docType === 'profileImage') {
             updateQuery = { $set: { profileImage: filePath } };
         } else {
             const updateField = `driverDetails.documents.${docType}`;
-            updateQuery = { 
-                $set: { 
+            updateQuery = {
+                $set: {
                     [updateField]: filePath,
+                    role: targetRole, // Ensure role is updated/set to driver
                     driverApprovalStatus: 'pending' // Reset to pending for admin review
-                } 
+                }
             };
         }
-        
+
         const user = await User.findByIdAndUpdate(
             req.user._id,
             updateQuery,
@@ -152,8 +163,8 @@ export const uploadDocument = async (req, res) => {
 
         res.json({ success: true, message: 'File uploaded and saved', filePath, docType });
     } catch (error) {
-         console.error("UPLOAD ERROR:", error);
-         res.status(500).json({ success: false, message: 'Upload Failed', error: error.message });
+        console.error("UPLOAD ERROR:", error);
+        res.status(500).json({ success: false, message: 'Upload Failed', error: error.message });
     }
 };
 
@@ -166,7 +177,7 @@ export const getOnlineDrivers = async (req, res) => {
             role: 'driver',
             'driverDetails.isOnline': true
         }).select('-password');
-        
+
         res.json({ success: true, data: drivers });
     } catch (error) {
         console.error(error);
@@ -185,10 +196,10 @@ export const getEarnings = async (req, res) => {
 
         const now = new Date();
         const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        
-        const startOfWeek = new Date(startOfToday); 
+
+        const startOfWeek = new Date(startOfToday);
         startOfWeek.setDate(startOfToday.getDate() - startOfToday.getDay());
-        
+
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
         const bookings = await Booking.find({
