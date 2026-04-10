@@ -43,9 +43,14 @@ export const publishRide = async (req, res) => {
 
         // Rentals enforce "All Seats Booked" pricing structure automatically via frontend mapping,
         // but backend creates it as a single pool block.
+        // Helper to map UI types to model types
+        let normalizedType = type?.toLowerCase();
+        if (normalizedType === 'city') normalizedType = 'local';
+        if (normalizedType === 'outstation pool') normalizedType = 'outstation';
+
         const newRide = await Ride.create({
             host: req.user._id,
-            type: type || 'local', // Mapping 'City' -> 'local', 'Outstation' -> 'outstation'
+            type: normalizedType || 'local', 
             origin: {
                 name: originName,
                 location: { type: 'Point', coordinates: originCoords || [0, 0] }
@@ -79,51 +84,48 @@ export const publishRide = async (req, res) => {
 // @access Private (Passenger)
 export const searchRides = async (req, res) => {
     try {
-        const { type, date, fromCoords, toCoords } = req.query; // 'local', 'outstation', 'intercity', 'date'
-        
-        // Find rides that are upcoming, have seats, and optionally match the type filter
-        let query = {
+        const { type, date, fromCoords } = req.query;
+        let normalizedType = type?.toLowerCase();
+        if (normalizedType === 'city') normalizedType = 'local';
+        if (normalizedType === 'outstation pool') normalizedType = 'outstation';
+
+        const query = {
             status: 'scheduled',
+            type: normalizedType || 'local',
             availableSeats: { $gt: 0 }
         };
 
         if (date) {
             const searchDate = new Date(date);
-            const startOfDay = new Date(searchDate.setHours(0, 0, 0, 0));
-            const endOfDay = new Date(searchDate.setHours(23, 59, 59, 999));
-            query.scheduledTime = { $gte: startOfDay, $lte: endOfDay };
+            if (!isNaN(searchDate.getTime())) {
+                const startOfDay = new Date(searchDate.setHours(0, 0, 0, 0));
+                const endOfDay = new Date(searchDate.setHours(23, 59, 59, 999));
+                query.scheduledTime = { $gte: startOfDay, $lte: endOfDay };
+            } else {
+                console.warn(`Invalid date format received: ${date}`);
+                query.scheduledTime = { $gte: new Date() };
+            }
         } else {
-            // Default: Upcoming rides from now
             query.scheduledTime = { $gte: new Date() };
         }
 
-        if (fromCoords) {
-            const [lng, lat] = fromCoords.split(',').map(Number);
-            query["origin.location"] = {
-                $geoWithin: {
-                    $centerSphere: [[lng, lat], 10 / 6378.1] // 10km radius
+        if (fromCoords && fromCoords !== '0,0') {
+            try {
+                const coordsArray = fromCoords.split(',').map(Number);
+                if (coordsArray.length === 2 && !isNaN(coordsArray[0]) && !isNaN(coordsArray[1])) {
+                    const [lng, lat] = coordsArray;
+                    query["origin.location"] = {
+                        $near: {
+                            $geometry: { type: "Point", coordinates: [lng, lat] },
+                            $maxDistance: normalizedType === 'local' ? 50000 : 100000 // 50km for local, 100km for outstation
+                        }
+                    };
                 }
-            };
+            } catch (err) {
+                console.error("Error parsing fromCoords:", err);
+            }
         }
 
-        if (toCoords) {
-            const [lng, lat] = toCoords.split(',').map(Number);
-            query["destination.location"] = {
-                $geoWithin: {
-                    $centerSphere: [[lng, lat], 20 / 6378.1] // 20km radius
-                }
-            };
-        }
-
-        const normalizedType = type ? type.toLowerCase() : null;
-
-        if (normalizedType) {
-            query.type = normalizedType;
-        }
-
-        // ─── Vehicle Eligibility Rules ─────────────────────────────────────────
-        // TRAVELER vehicles are large multi-seaters meant for outstation/rental only.
-        // They must NOT appear in city (local) pool searches — just like Rapido/Ola.
         if (normalizedType === 'local') {
             query.vehicleType = { $ne: 'TRAVELER' };
         }
@@ -163,7 +165,7 @@ export const bookSeat = async (req, res) => {
 
         const ride = await Ride.findById(rideId);
         if (!ride) return res.status(404).json({ success: false, message: 'Ride not found' });
-        
+
         if (ride.availableSeats < seats) {
             return res.status(400).json({ success: false, message: `Only ${ride.availableSeats} seats available` });
         }
@@ -251,13 +253,13 @@ export const getDriverPools = async (req, res) => {
 export const getPassengerPools = async (req, res) => {
     try {
         // Query rides where this user ID is inside the passengers array AND their booking is not cancelled
-        const rides = await Ride.find({ 
-            passengers: { 
-                $elemMatch: { 
-                    user: req.user._id, 
-                    bookingStatus: { $ne: 'cancelled' } 
-                } 
-            } 
+        const rides = await Ride.find({
+            passengers: {
+                $elemMatch: {
+                    user: req.user._id,
+                    bookingStatus: { $ne: 'cancelled' }
+                }
+            }
         })
             .populate('host', 'name phone profileImage driverDetails')
             .sort({ scheduledTime: -1 });
@@ -276,9 +278,9 @@ export const updatePoolStatus = async (req, res) => {
     try {
         const { status } = req.body;
         const validStatuses = ['scheduled', 'ongoing', 'completed', 'cancelled'];
-        
+
         if (!validStatuses.includes(status)) {
-             return res.status(400).json({ success: false, message: 'Invalid status' });
+            return res.status(400).json({ success: false, message: 'Invalid status' });
         }
 
         const ride = await Ride.findById(req.params.id);
@@ -351,7 +353,7 @@ export const updatePoolStatus = async (req, res) => {
                             description: `Pool Earning (Ride ID: ${ride._id.toString().slice(-6).toUpperCase()}) - 0% Fee`,
                             referenceId: ride._id
                         });
-                    } 
+                    }
                     p.bookingStatus = 'completed';
                     p.paymentStatus = 'completed';
                 }
@@ -384,16 +386,16 @@ export const cancelBooking = async (req, res) => {
             const passengerId = p.user?._id || p.user;
             return passengerId && passengerId.toString() === req.user._id.toString() && p.bookingStatus !== 'cancelled';
         });
-        
+
         if (passengerIndex === -1) {
             return res.status(400).json({ success: false, message: 'Active booking not found for this user' });
         }
 
         const booking = ride.passengers[passengerIndex];
-        
+
         // Restore seats
         ride.availableSeats += booking.seatsBooked;
-        
+
         // Update status and reason
         booking.bookingStatus = 'cancelled';
         booking.cancellationReason = cancellationReason || 'No reason provided';
