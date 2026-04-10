@@ -65,13 +65,6 @@ export const updateDriverProfile = async (req, res) => {
             };
         }
 
-        // If a passenger provides driver-specific details, upgrade their role to 'driver'
-        if (user.role === 'passenger' && (vehicle || licenseNumber || documents || bankDetails)) {
-            console.log(`Upgrading user ${user._id} role to driver during profile update.`);
-            user.role = 'driver';
-            user.driverApprovalStatus = 'pending';
-        }
-
         await user.save();
 
         res.json({ success: true, message: 'Driver profile updated', data: user });
@@ -130,12 +123,9 @@ export const uploadDocument = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Invalid or missing docType' });
         }
 
-        // Security: If a passenger uploads a driver document, we automatically upgrade their role to 'driver' 
-        // as they are likely going through the driver registration process.
-        let targetRole = req.user.role;
+        // Security: Non-drivers can ONLY upload profileImage
         if (!isDriver && docType !== 'profileImage') {
-            console.log(`Upgrading user ${req.user._id} role from passenger to driver for document upload.`);
-            targetRole = 'driver';
+            return res.status(403).json({ success: false, message: 'Passengers can only upload profile images' });
         }
 
         // Return the path - Cloudinary provides the full URL in req.file.path
@@ -149,7 +139,6 @@ export const uploadDocument = async (req, res) => {
             updateQuery = {
                 $set: {
                     [updateField]: filePath,
-                    role: targetRole, // Ensure role is updated/set to driver
                     driverApprovalStatus: 'pending' // Reset to pending for admin review
                 }
             };
