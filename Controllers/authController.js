@@ -331,19 +331,21 @@ export const googleLogin = async (req, res) => {
         let user = await User.findOne({ email });
 
         if (!user) {
-            // User does not exist in our database.
-            // Return 404 with Google payload so frontend can route to Profile Setup.
-            return res.status(404).json({
-                success: false,
-                isRegistered: false,
-                message: 'User not registered',
-                googleData: {
-                    email,
-                    name: name || 'Google User',
-                    picture,
-                    idToken
+            user = new User({
+                name: name || 'Google User',
+                email,
+                password: await bcrypt.hash(idToken + process.env.JWT_SECRET, 10),
+                role: role?.toLowerCase() || 'passenger',
+                profileImage: picture,
+                verificationStatus: {
+                    email: true,
+                    phone: false,
+                    idCard: false,
+                    communityTrusted: false
                 }
             });
+
+            await user.save();
         }
 
         // --- NEW: Role Verification for existing Google users ---
