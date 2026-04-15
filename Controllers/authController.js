@@ -5,7 +5,7 @@ import User from '../Models/User.js';
 import { sendSMS, sendPersonalizedSMS } from '../Utils/smsService.js';
 import { sendWhatsAppOTP } from '../Utils/whatsappService.js';
 
-const googleClient = new OAuth2Client('197183880790-71av0ri5ibs7beab34kqj9qkjfv4tr1j.apps.googleusercontent.com');
+const googleClient = new OAuth2Client('909296510785-e3a279afthh5br10j180ie4lidh9ucp2.apps.googleusercontent.com');
 
 // ─── Helper ────────────────────────────────────────────────────
 const generateToken = (id) =>
@@ -34,11 +34,11 @@ export const register = async (req, res) => {
         }
 
         const normalizedPhone = phone.replace(/\D/g, '').slice(-10);
-        const userExists = await User.findOne({ 
+        const userExists = await User.findOne({
             $or: [
-                { email }, 
+                { email },
                 { phone: new RegExp(normalizedPhone + '$') }
-            ] 
+            ]
         });
         if (userExists) {
             console.log(`DEBUG: User already exists: ${email} / ${phone}`);
@@ -253,13 +253,13 @@ export const verifyOTP = async (req, res) => {
 
         console.log("DEBUG verifyOTP - Request phone:", phone);
         console.log("DEBUG verifyOTP - Request otp:", otp);
-        
+
         const normalizedPhone = phone.replace(/\D/g, '').slice(-10);
         console.log("DEBUG verifyOTP - Normalized phone for search:", normalizedPhone);
 
         // Search for user with phone ending in those 10 digits
         const user = await User.findOne({ phone: new RegExp(normalizedPhone + '$') });
-        
+
         if (!user) {
             console.log("DEBUG verifyOTP - User NOT FOUND in database for phone:", normalizedPhone);
             return sendError(res, 404, 'User not found. Please register first.');
@@ -275,7 +275,7 @@ export const verifyOTP = async (req, res) => {
             console.log("DEBUG verifyOTP - Verification FAILED: Invalid or expired OTP");
             return sendError(res, 401, 'Invalid or expired OTP');
         }
-        
+
         console.log("DEBUG verifyOTP - Verification SUCCESS");
 
         // --- Role Verification ---
