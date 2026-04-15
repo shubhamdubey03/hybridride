@@ -318,7 +318,7 @@ export const googleLogin = async (req, res) => {
 
         const ticket = await googleClient.verifyIdToken({
             idToken,
-            audience: '110831328035-bqft18nqtfk06o3qrc78d414s731m8b5.apps.googleusercontent.com',
+            audience: '909296510785-e3a279afthh5br10j180ie4lidh9ucp2.apps.googleusercontent.com',
         });
         const payload = ticket.getPayload();
 
